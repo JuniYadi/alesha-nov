@@ -1,0 +1,24 @@
+{
+  "name": "alesha-node",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter @alesha-nov/config build && bun run --filter @alesha-nov/email build && bun run --filter @alesha-nov/auth build && bun run --filter @alesha-nov/auth-web build",
+    "typecheck": "bun run --filter @alesha-nov/config typecheck && bun run --filter @alesha-nov/email typecheck && bun run --filter @alesha-nov/auth typecheck && bun run --filter @alesha-nov/auth-web typecheck",
+    "lint": "bun run --filter @alesha-nov/config lint && bun run --filter @alesha-nov/email lint && bun run --filter @alesha-nov/auth lint && bun run --filter @alesha-nov/auth-web lint",
+    "test": "bun run --filter @alesha-nov/config test && bun run --filter @alesha-nov/email test && bun run --filter @alesha-nov/auth test && bun run --filter @alesha-nov/auth-web test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.6.1",
+    "@types/nodemailer": "^7.0.3",
+    "bun-types": "^1.3.2",
+    "eslint": "^9.36.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.44.1"
+  }
+}
