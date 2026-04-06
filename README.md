@@ -14,4 +14,7 @@ cd ~/alesha-node
 bun install
 bun run build
 bun run typecheck
+bun run lint
+bun run test
+bun run test:coverage
 ```
