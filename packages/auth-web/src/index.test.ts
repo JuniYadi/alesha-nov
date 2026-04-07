@@ -208,3 +208,372 @@ describe("getSessionFromRequest", () => {
     expect(session).toBeNull();
   });
 });
+
+describe("GET /me endpoint", () => {
+  test("returns 401 when no session cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      getUser: async () => null,
+    });
+
+    const response = await app.handleRequest(new Request("http://localhost/auth/me", { method: "GET" }));
+    expect(response.status).toBe(401);
+  });
+
+  test("returns 501 when getUser is not configured", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/me", { method: "GET", headers: { cookie } })
+    );
+
+    expect(response.status).toBe(501);
+  });
+
+  test("returns user data when session is valid and getUser resolves user", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      getUser: async (userId: string) => {
+        if (userId === "u-1") {
+          return {
+            id: "u-1",
+            email: "ok@example.com",
+            passwordHash: "hashed",
+            name: "OK",
+            image: null,
+            emailVerifiedAt: null,
+            roles: ["admin"],
+            createdAt: "2024-01-01T00:00:00.000Z",
+          };
+        }
+        return null;
+      },
+    });
+
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/me", { method: "GET", headers: { cookie } })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { user: Record<string, unknown> };
+    expect(body.user.email).toBe("ok@example.com");
+    expect(body.user.passwordHash).toBeUndefined();
+  });
+
+  test("returns 401 when getUser returns null for valid session", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      getUser: async () => null,
+    });
+
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/me", { method: "GET", headers: { cookie } })
+    );
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("POST /logout", () => {
+  test("clears cookie and returns 200", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/logout", { method: "POST" })
+    );
+
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("alesha_auth=");
+    expect(cookie).toContain("Max-Age=0");
+  });
+});
+
+describe("POST /magic-link/request", () => {
+  test("calls issueMagicLinkToken and returns 200 with token", async () => {
+    let called = false;
+    const customService = makeAuthService();
+    customService.issueMagicLinkToken = async ({ email }: { email: string }) => {
+      called = true;
+      expect(email).toBe("user@example.com");
+      return "request-token";
+    };
+
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: customService,
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/magic-link/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.com" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(called).toBe(true);
+    const body = (await response.json()) as { token: string };
+    expect(body.token).toBe("request-token");
+  });
+});
+
+describe("POST /oauth/:provider/login", () => {
+  test("success flow returns user and sets session cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          providerAccountId: "google-123",
+          email: "oauth@example.com",
+          name: "OAuth User",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { user: Record<string, unknown> };
+    expect(body.user.email).toBe("oauth@example.com");
+    expect(body.user.name).toBe("OAuth"); // mock returns hardcoded name
+    expect(body.user.passwordHash).toBeUndefined();
+    expect(response.headers.get("set-cookie")).toContain("alesha_auth=");
+  });
+});
+
+describe("POST /oauth/:provider/link", () => {
+  test("success flow links account and returns 200 for authenticated user", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    // First login to get a session cookie
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/github/link", {
+        method: "POST",
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({
+          providerAccountId: "github-456",
+          providerEmail: "github@example.com",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { account: Record<string, unknown> };
+    expect(body.account.provider).toBe("github");
+    expect(body.account.providerAccountId).toBe("github-456");
+  });
+
+  test("returns 401 when not authenticated", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/github/link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ providerAccountId: "github-456" }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("GET /linked-accounts", () => {
+  test("returns list of accounts for authenticated user", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    // First login to get a session cookie
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/linked-accounts", { method: "GET", headers: { cookie } })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { accounts: Record<string, unknown>[] };
+    expect(body.accounts).toHaveLength(1);
+    expect(body.accounts[0].provider).toBe("google");
+  });
+
+  test("returns 401 when not authenticated", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/linked-accounts", { method: "GET" })
+    );
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("PUT /roles", () => {
+  test("success path for admin updates own roles", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    // First login with admin role
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/roles", {
+        method: "PUT",
+        headers: { "content-type": "application/json", cookie },
+        body: JSON.stringify({ roles: ["admin", "billing.write"] }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { roles: string[] };
+    expect(body.roles).toEqual(["admin", "billing.write"]);
+  });
+});
+
+describe("secureCookie option", () => {
+  test("secureCookie: true adds Secure flag to cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: true, // default is true
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "new@example.com", password: "x" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const cookie = response.headers.get("set-cookie") ?? "";
+    expect(cookie).toContain("Secure");
+  });
+});
+
+describe("basePath normalization", () => {
+  test("GET /me works under custom basePath", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      basePath: "/api/auth/",
+      secureCookie: false,
+      getUser: async (userId: string) => ({
+        id: userId,
+        email: "ok@example.com",
+        passwordHash: "x",
+        name: null,
+        image: null,
+        emailVerifiedAt: null,
+        roles: [],
+        createdAt: "2024-01-01T00:00:00.000Z",
+      }),
+    });
+
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResp.headers.get("set-cookie") ?? "";
+    const response = await app.handleRequest(
+      new Request("http://localhost/api/auth/me", { method: "GET", headers: { cookie } })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { user: Record<string, unknown> };
+    expect(body.user.email).toBe("ok@example.com");
+  });
+});
