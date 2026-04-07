@@ -1,7 +1,7 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
-import { useAuth } from "./context";
+import { type ReactNode } from "react";
+// import { useAuth } from "./context";
 import { useAuthGuard as _useAuthGuard } from "./hooks";
 
 export function AuthGuard({

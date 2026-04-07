@@ -28,14 +28,14 @@ async function fetchMe(config: AuthApiConfig): Promise<{ user: PublicUser } | nu
 }
 
 export function AuthProvider({ children, config: configProp }: { children: ReactNode; config?: AuthApiConfig }) {
-  const config: AuthApiConfig = configProp ?? {};
+  const config = configProp ?? {};
   const [state, setState] = useState<AuthState>({ status: "loading", session: null, user: null });
 
   const fetchAll = useCallback(async () => {
     try {
       const [sessionData, meData] = await Promise.all([fetchSession(config), fetchMe(config)]);
 
-      if (sessionData) {
+      if (sessionData?.session) {
         setState({ status: "authenticated", session: sessionData.session, user: meData?.user ?? null });
       } else {
         setState({ status: "unauthenticated", session: null, user: null });

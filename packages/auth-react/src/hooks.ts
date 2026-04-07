@@ -21,8 +21,14 @@ async function postJson<T>(path: string, body: unknown, config: AuthApiConfig): 
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(err.error ?? res.statusText);
+    let errMsg = "Request failed";
+    try {
+      const err = await res.json();
+      errMsg = err.error ?? res.statusText;
+    } catch {
+      errMsg = res.statusText || "Request failed";
+    }
+    throw new Error(errMsg);
   }
 
   return res.json() as Promise<T>;
