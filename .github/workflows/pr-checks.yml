@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint-and-test:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,10 +24,8 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      - name: Unit test
-        run: bun run test
-
-  coverage:
+  test:
+    needs: lint
     runs-on: ubuntu-latest
 
     steps:
@@ -42,7 +40,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate coverage (lcov)
+      - name: Build (single run for workspace package exports)
+        run: bun run build
+
+      - name: Unit test + coverage (lcov)
         run: bun run test:coverage
 
       - name: Upload coverage to Codecov
