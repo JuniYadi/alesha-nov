@@ -1,43 +1,22 @@
----
-title: Alesha Node Monorepo
----
+# alesha-nov monorepo (nodejs)
 
-# Alesha Node Monorepo
+[![codecov](https://codecov.io/gh/JuniYadi/alesha-nov/graph/badge.svg?token=x0kbSnh7Ku)](https://codecov.io/gh/JuniYadi/alesha-nov)
 
-A Bun-powered TypeScript monorepo containing reusable packages for authentication, email, and configuration.
+Bun workspace monorepo for:
 
-## Packages
+- `@alesha-nov/config` — DB config + Bun SQL helpers + migration runner
+- `@alesha-nov/auth` — email/password auth + magic link auth + auth migrations
+- `@alesha-nov/email` — AWS SES and SMTP email providers
+- `@alesha-nov/auth-web` — HTTP auth route handlers + adapters for TanStack Start and Next.js
 
-| Package | Description |
-|---------|-------------|
-| [`@alesha-nov/config`](packages/config) | Database client, migrations, and environment config helpers |
-| [`@alesha-nov/auth`](packages/auth) | Authentication service: signup, login, magic links, OAuth |
-| [`@alesha-nov/email`](packages/email) | Email delivery via AWS SES or SMTP |
-| [`@alesha-nov/auth-web`](packages/auth-web) | HTTP route handlers for web auth (cookies, sessions) |
-
-## Quick Install
+## Quick start
 
 ```bash
-# Install all workspace dependencies
+cd ~/alesha-node
 bun install
-
-# Build all packages
 bun run build
-
-# Run tests
-bun test
-```
-
-## Project Structure
-
-```
-alesha-node/
-├── packages/
-│   ├── config/       # @alesha-nov/config
-│   ├── auth/         # @alesha-nov/auth
-│   ├── email/        # @alesha-nov/email
-│   └── auth-web/     # @alesha-nov/auth-web
-├── docs/             # Docsify documentation
-├── tsconfig.base.json
-└── package.json      # Workspace root
+bun run typecheck
+bun run lint
+bun run test
+bun run test:coverage
 ```
