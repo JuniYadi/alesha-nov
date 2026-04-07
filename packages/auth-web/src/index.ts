@@ -16,6 +16,8 @@ export interface AuthWebOptions {
   cookieName?: string;
   sessionTtlSeconds?: number;
   secureCookie?: boolean;
+  /* Optional: resolve a user by ID for GET /me. */
+  getUser?: (userId: string) => Promise<AuthUser | null>;
 }
 
 export interface AuthSession {
@@ -214,6 +216,19 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const session = getSessionFromRequest(request);
         if (!session) return json(401, { error: "Unauthorized" });
         return json(200, { session });
+      }
+
+      if (method === "GET" && subPath === "/me") {
+        const session = getSessionFromRequest(request);
+        if (!session) return json(401, { error: "Unauthorized" });
+
+        if (!options.getUser) return json(501, { error: "getUser is not configured" });
+
+        const user = await options.getUser(session.userId);
+        if (!user) return json(401, { error: "User not found" });
+
+        const publicUser = toPublicUser(user);
+        return json(200, { user: publicUser });
       }
 
       if (method === "POST" && subPath === "/magic-link/request") {
