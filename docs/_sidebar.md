@@ -1,0 +1,9 @@
+# Navigation
+
+- [Home](/)
+- [Packages](packages/)
+  - [@alesha-nov/config](packages/config)
+  - [@alesha-nov/auth](packages/auth)
+  - [@alesha-nov/email](packages/email)
+  - [@alesha-nov/auth-web](packages/auth-web)
+- [Development](development)
