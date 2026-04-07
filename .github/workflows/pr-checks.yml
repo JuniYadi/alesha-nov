@@ -69,8 +69,18 @@ jobs:
             auth_web=true
           fi
 
-          # Dependency propagation:
-          # auth depends on config, auth-web depends on auth
+          # Dependency propagation (both directions for CI build/test correctness):
+          # Upstream deps needed for build:
+          # auth-web -> auth -> config
+          if [[ "$auth_web" == "true" ]]; then
+            auth=true
+          fi
+          if [[ "$auth" == "true" ]]; then
+            config=true
+          fi
+
+          # Downstream impact for package-change fanout:
+          # config impacts auth + auth-web, auth impacts auth-web
           if [[ "$config" == "true" ]]; then
             auth=true
             auth_web=true
