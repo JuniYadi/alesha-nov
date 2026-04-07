@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AuthApiConfig, LoginInput, SignupInput, PublicUser } from "./types";
+import type { AuthApiConfig, LoginInput, SignupInput, PublicUser, OAuthProvider } from "./types";
 import { useAuth } from "./context";
 
 function buildUrl(path: string, config: AuthApiConfig): string {
@@ -167,6 +167,30 @@ export function useResetPassword(config: AuthApiConfig = {}) {
   );
 
   return { reset, loading, error, success };
+}
+
+export function useOAuthLogin(config: AuthApiConfig = {}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const login = useCallback(
+    (provider: OAuthProvider) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const location = buildUrl(`/oauth/${provider}/authorize`, config);
+        window.location.assign(location);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "OAuth login redirect failed";
+        setError(msg);
+        setLoading(false);
+        throw e;
+      }
+    },
+    [config],
+  );
+
+  return { login, loading, error };
 }
 
 export function useAuthGuard({ redirectTo }: { redirectTo?: string } = {}) {

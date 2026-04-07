@@ -1,7 +1,7 @@
 export { AuthProvider, AuthContext, useAuth } from "./context";
 export type { AuthContextValue, AuthState } from "./context";
 
-export { useSignup, useLogin, useLogout, usePasswordResetRequest, useResetPassword, useAuthGuard } from "./hooks";
+export { useSignup, useLogin, useLogout, usePasswordResetRequest, useResetPassword, useOAuthLogin, useAuthGuard } from "./hooks";
 
 export { AuthGuard } from "./auth-guard";
 

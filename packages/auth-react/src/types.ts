@@ -39,6 +39,8 @@ export interface LoginInput {
   password: string;
 }
 
+export type OAuthProvider = "google" | "github";
+
 export interface AuthApiConfig {
   basePath?: string;
   baseUrl?: string;

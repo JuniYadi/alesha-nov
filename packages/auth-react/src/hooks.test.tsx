@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach, vi, type Mock } from "bun:test";
 import { act, renderHook, cleanup } from "@testing-library/react";
-import { useLogin, useSignup, useLogout, usePasswordResetRequest, useResetPassword } from "./hooks";
+import { useLogin, useSignup, useLogout, usePasswordResetRequest, useResetPassword, useOAuthLogin } from "./hooks";
 import { useAuth } from "./context";
 import type { PublicUser, AuthContextValue } from "./types";
 
@@ -356,5 +356,38 @@ describe("useResetPassword", () => {
 
     expect(result.current.success).toBe(false);
     expect(result.current.error).toBe("Invalid or expired token");
+  });
+});
+
+describe("useOAuthLogin", () => {
+  beforeEach(() => {
+    setupFetch();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("redirects browser to oauth authorize endpoint", () => {
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
+
+    const { result } = renderHook(() => useOAuthLogin({ basePath: "/auth" }));
+
+    act(() => {
+      result.current.login("google");
+    });
+
+    expect(assignSpy).toHaveBeenCalledWith("/auth/oauth/google/authorize");
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(true);
+
+    assignSpy.mockRestore();
   });
 });

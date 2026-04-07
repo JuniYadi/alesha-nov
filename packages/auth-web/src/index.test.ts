@@ -445,6 +445,116 @@ describe("POST /password-reset/reset", () => {
   });
 });
 
+describe("GET /oauth/:provider/authorize", () => {
+  test("returns 501 when oauth authorize flow is not configured", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/authorize", { method: "GET" })
+    );
+
+    expect(response.status).toBe(501);
+  });
+
+  test("returns 302 and sets OAuth state cookie when configured", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      getOAuthAuthorizeUrl: ({ provider, state, redirectUri }) => {
+        expect(provider).toBe("google");
+        expect(state.length).toBeGreaterThan(10);
+        expect(redirectUri).toBe("http://localhost/auth/oauth/google/callback");
+        return `https://oauth.example/authorize?provider=${provider}&state=${state}`;
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/authorize", { method: "GET" })
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("https://oauth.example/authorize?");
+    expect(response.headers.get("set-cookie")).toContain("alesha_oauth_state_google=");
+  });
+});
+
+describe("GET /oauth/:provider/callback", () => {
+  test("returns 501 when oauth callback flow is not configured", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/callback?code=x&state=y", { method: "GET" })
+    );
+
+    expect(response.status).toBe(501);
+  });
+
+  test("returns 400 on state mismatch", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      completeOAuthCallback: () => ({
+        providerAccountId: "google-123",
+        email: "oauth@example.com",
+      }),
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/callback?code=x&state=wrong", {
+        method: "GET",
+        headers: { cookie: "alesha_oauth_state_google=expected" },
+      })
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  test("success callback logs in user, sets session cookie, and clears oauth state cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      completeOAuthCallback: ({ provider, code, state, redirectUri }) => {
+        expect(provider).toBe("google");
+        expect(code).toBe("oauth-code");
+        expect(state).toBe("ok-state");
+        expect(redirectUri).toBe("http://localhost/auth/oauth/google/callback");
+        return {
+          providerAccountId: "google-123",
+          email: "oauth-callback@example.com",
+          name: "OAuth Callback",
+        };
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/oauth/google/callback?code=oauth-code&state=ok-state", {
+        method: "GET",
+        headers: { cookie: "alesha_oauth_state_google=ok-state" },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { user: Record<string, unknown> };
+    expect(body.user.email).toBe("oauth-callback@example.com");
+
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("alesha_auth=");
+    expect(setCookie).toContain("alesha_oauth_state_google=");
+    expect(setCookie).toContain("Max-Age=0");
+  });
+});
+
 describe("POST /oauth/:provider/login", () => {
   test("success flow returns user and sets session cookie", async () => {
     const app = createAuthWeb({
