@@ -8,13 +8,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./auth-migrations": {
+      "types": "./dist/auth-migrations.d.ts",
+      "import": "./dist/auth-migrations.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --external bun",
+    "build": "tsup src/index.ts src/auth-migrations.ts --format esm --dts --external bun",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --ext .ts",
     "test": "bun test"
