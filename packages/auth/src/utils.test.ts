@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { assertProvider, hashPassword, hashToken, normalizeEmail, normalizeRoles, verifyPassword } from "./utils";
+import { assertProvider, hashPassword, hashToken, newId, normalizeEmail, normalizeRoles, verifyPassword } from "./utils";
 
 describe("auth utils", () => {
   test("normalizeEmail trims and lowercases", () => {
@@ -27,6 +27,16 @@ describe("auth utils", () => {
 
   test("hashToken is deterministic sha256", () => {
     expect(hashToken("token")).toBe("3c469e9d6c5875d37a43f353d4f88e61fcf812c66eee3457465a40b0da4153e0");
+  });
+
+  test("newId returns RFC UUID", () => {
+    const id = newId();
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  });
+
+  test("newId can force v4", () => {
+    const id = newId("v4");
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   });
 
   test("assertProvider accepts known providers and rejects unknown", () => {
