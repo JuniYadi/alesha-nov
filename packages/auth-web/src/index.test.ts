@@ -28,6 +28,11 @@ const makeAuthService = () => ({
     return null;
   },
   issueMagicLinkToken: async () => "magic-token",
+  issuePasswordResetToken: async ({ email }: { email: string }) => {
+    if (email === "missing@example.com") throw new Error("User not found");
+    return "reset-token";
+  },
+  resetPassword: async ({ token }: { token: string }) => token === "valid-reset-token",
   verifyMagicLinkToken: async (token: string) => {
     if (token === "valid") {
       return {
@@ -357,6 +362,86 @@ describe("POST /magic-link/request", () => {
     expect(called).toBe(true);
     const body = (await response.json()) as { token: string };
     expect(body.token).toBe("request-token");
+  });
+});
+
+describe("POST /password-reset/request", () => {
+  test("returns token when issuePasswordResetToken succeeds", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/password-reset/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.com" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { token: string };
+    expect(body.token).toBe("reset-token");
+  });
+
+  test("returns 400 when issuePasswordResetToken throws", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/password-reset/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "missing@example.com" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /password-reset/reset", () => {
+  test("returns 200 when resetPassword succeeds", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/password-reset/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "valid-reset-token", newPassword: "new-pass-123" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean };
+    expect(body.ok).toBe(true);
+  });
+
+  test("returns 401 when resetPassword fails", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/password-reset/reset", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "bad-token", newPassword: "new-pass-123" }),
+      })
+    );
+
+    expect(response.status).toBe(401);
   });
 });
 

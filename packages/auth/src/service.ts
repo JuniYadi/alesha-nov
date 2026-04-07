@@ -9,6 +9,8 @@ import type {
   OAuthAccountLink,
   OAuthLoginInput,
   OAuthProvider,
+  PasswordResetInput,
+  ResetPasswordInput,
   SignupInput,
   UserRow,
 } from "./types";
@@ -132,7 +134,7 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
       });
     },
 
-    async issuePasswordResetToken(input: MagicLinkInput) {
+    async issuePasswordResetToken(input: PasswordResetInput) {
       const rows = await client.sql`
         SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
       `;
@@ -152,7 +154,7 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
       return rawToken;
     },
 
-    async resetPassword(input: { token: string; newPassword: string }) {
+    async resetPassword(input: ResetPasswordInput) {
       const tokenHash = hashToken(input.token);
       const rows = await client.sql`
         SELECT user_id, expires_at, used_at FROM auth_password_reset_tokens WHERE token_hash = ${tokenHash} LIMIT 1

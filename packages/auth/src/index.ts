@@ -11,6 +11,8 @@ export type {
   OAuthAccountLink,
   OAuthLoginInput,
   OAuthProvider,
+  PasswordResetInput,
+  ResetPasswordInput,
   SignupInput,
   UserRow,
 } from "./types";
