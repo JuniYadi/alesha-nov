@@ -13,6 +13,33 @@ export interface Migration {
   sql: string;
 }
 
+export interface JWTConfig {
+  secret: string;
+  issuer?: string;
+  audience?: string;
+  expiresIn?: string;
+}
+
+export type SessionSameSite = "lax" | "strict" | "none";
+
+export interface SessionConfig {
+  cookieName: string;
+  ttlSeconds: number;
+  secure: boolean;
+  sameSite: SessionSameSite;
+}
+
+export interface OAuthProviderConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}
+
+export interface OAuthConfig {
+  google?: OAuthProviderConfig;
+  github?: OAuthProviderConfig;
+}
+
 export interface DatabaseClient {
   sql: SQL;
   config: DBConfig;
@@ -41,6 +68,56 @@ export function createDatabaseClient(config: DBConfig): DatabaseClient {
 
   return { sql, config };
 }
+
+function readEnv(keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = process.env[key]?.trim();
+    if (value) return value;
+  }
+  return undefined;
+}
+
+export function resolveJWTSecret(input?: string): string {
+  const secret = input?.trim() || readEnv(["AUTH_JWT_SECRET", "JWT_SECRET"]);
+  if (!secret) {
+    throw new Error("Missing JWT secret. Set AUTH_JWT_SECRET or JWT_SECRET.");
+  }
+  return secret;
+}
+
+function resolveOAuthProviderConfig(provider: "google" | "github"): OAuthProviderConfig | undefined {
+  const upper = provider.toUpperCase();
+  const clientId = readEnv([`AUTH_OAUTH_${upper}_CLIENT_ID`, `${upper}_CLIENT_ID`]);
+  const clientSecret = readEnv([
+    `AUTH_OAUTH_${upper}_CLIENT_SECRET`,
+    `${upper}_CLIENT_SECRET`,
+  ]);
+  const redirectUri = readEnv([
+    `AUTH_OAUTH_${upper}_REDIRECT_URI`,
+    `${upper}_REDIRECT_URI`,
+  ]);
+
+  if (!clientId && !clientSecret && !redirectUri) {
+    return undefined;
+  }
+
+  if (!clientId || !clientSecret || !redirectUri) {
+    throw new Error(
+      `Incomplete ${provider} OAuth env. Require CLIENT_ID, CLIENT_SECRET, and REDIRECT_URI.`
+    );
+  }
+
+  return { clientId, clientSecret, redirectUri };
+}
+
+export function resolveOAuthConfig(): OAuthConfig {
+  return {
+    google: resolveOAuthProviderConfig("google"),
+    github: resolveOAuthProviderConfig("github"),
+  };
+}
+
+export { authMigrationsBundle } from "./auth-migrations";
 
 export async function ensureMigrationsTable(client: DatabaseClient): Promise<void> {
   const tableSql = `
