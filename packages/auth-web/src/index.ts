@@ -257,6 +257,27 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         });
       }
 
+      if (method === "POST" && subPath === "/password-reset/request") {
+        const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
+        const token = await options.authService.issuePasswordResetToken({
+          email: body.email,
+          ttlSeconds: body.ttlSeconds,
+        });
+
+        return json(200, { token });
+      }
+
+      if (method === "POST" && subPath === "/password-reset/reset") {
+        const body = await safeJson<{ token: string; newPassword: string }>(request);
+        const ok = await options.authService.resetPassword({
+          token: body.token,
+          newPassword: body.newPassword,
+        });
+
+        if (!ok) return json(401, { error: "Invalid or expired token" });
+        return json(200, { ok: true });
+      }
+
       if (method === "POST" && subPath.startsWith("/oauth/") && subPath.endsWith("/login")) {
         const provider = subPath.split("/")[2] as OAuthProvider;
         const body = await safeJson<Omit<OAuthLoginInput, "provider">>(request);
