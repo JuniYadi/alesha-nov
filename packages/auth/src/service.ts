@@ -132,6 +132,55 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
       });
     },
 
+    async issuePasswordResetToken(input: MagicLinkInput) {
+      const rows = await client.sql`
+        SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
+      `;
+      const user = rows[0] as { id: string } | undefined;
+      if (!user) throw new Error("User not found");
+
+      const rawToken = randomBytes(32).toString("base64url");
+      const tokenHash = hashToken(rawToken);
+      const ttlSeconds = input.ttlSeconds ?? 60 * 60; // 1 hour default
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+      await client.sql`
+        INSERT INTO auth_password_reset_tokens (token_hash, user_id, expires_at)
+        VALUES (${tokenHash}, ${user.id}, ${expiresAt})
+      `;
+
+      return rawToken;
+    },
+
+    async resetPassword(input: { token: string; newPassword: string }) {
+      const tokenHash = hashToken(input.token);
+      const rows = await client.sql`
+        SELECT user_id, expires_at, used_at FROM auth_password_reset_tokens WHERE token_hash = ${tokenHash} LIMIT 1
+      `;
+
+      const row = rows[0] as { user_id: string; expires_at: string; used_at: string | null } | undefined;
+
+      if (!row) return false;
+      if (row.used_at) return false;
+      if (new Date(row.expires_at).getTime() < Date.now()) return false;
+
+      const passwordHash = hashPassword(input.newPassword);
+
+      await client.sql`
+        UPDATE auth_users
+        SET password_hash = ${passwordHash}
+        WHERE id = ${row.user_id}
+      `;
+
+      await client.sql`
+        UPDATE auth_password_reset_tokens
+        SET used_at = ${new Date().toISOString()}
+        WHERE token_hash = ${tokenHash}
+      `;
+
+      return true;
+    },
+
     async setUserRoles(userId: string, roles: string[]) {
       const normalizedRoles = normalizeRoles(roles);
       const existingUser = await getUserById(client, userId);

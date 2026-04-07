@@ -81,4 +81,17 @@ export const authMigrations: Migration[] = [
       )
     `,
   },
+  {
+    id: "009_create_password_reset_tokens",
+    sql: `
+      CREATE TABLE IF NOT EXISTS auth_password_reset_tokens (
+        token_hash VARCHAR(128) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+      )
+    `,
+  },
 ];
