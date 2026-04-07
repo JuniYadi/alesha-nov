@@ -1,4 +1,6 @@
-# alesha-node monorepo
+# alesha-nov monorepo (nodejs)
+
+[![codecov](https://codecov.io/gh/JuniYadi/alesha-nov/graph/badge.svg?token=x0kbSnh7Ku)](https://codecov.io/gh/JuniYadi/alesha-nov)
 
 Bun workspace monorepo for:
 
