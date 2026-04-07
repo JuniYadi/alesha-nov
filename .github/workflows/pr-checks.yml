@@ -187,8 +187,9 @@ jobs:
 
       - name: Upload coverage to Codecov
         if: needs.lint.outputs.any_changed == 'true' && hashFiles('coverage/lcov.info') != ''
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           fail_ci_if_error: true
           verbose: true
