@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { OAuthProvider } from "./types";
 
 export function normalizeEmail(email: string): string {
@@ -40,8 +40,24 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export function newId(): string {
-  return Bun.randomUUIDv7();
+export type IdVersion = "v4" | "v7";
+
+export function newId(version: IdVersion = "v7"): string {
+  if (version === "v4") {
+    return randomUUID();
+  }
+
+  const bunRuntime = globalThis as typeof globalThis & {
+    Bun?: {
+      randomUUIDv7?: () => string;
+    };
+  };
+
+  if (typeof bunRuntime.Bun?.randomUUIDv7 === "function") {
+    return bunRuntime.Bun.randomUUIDv7();
+  }
+
+  return randomUUID();
 }
 
 export function assertProvider(provider: string): asserts provider is OAuthProvider {
