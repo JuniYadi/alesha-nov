@@ -4,4 +4,5 @@
   - [@alesha-nov/auth](packages/auth)
   - [@alesha-nov/email](packages/email)
   - [@alesha-nov/auth-web](packages/auth-web)
+  - [@alesha-nov/auth-react](packages/auth-react)
 - [Development](development)

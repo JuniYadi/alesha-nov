@@ -16,6 +16,16 @@ export interface MagicLinkInput {
   ttlSeconds?: number;
 }
 
+export interface PasswordResetInput {
+  email: string;
+  ttlSeconds?: number;
+}
+
+export interface ResetPasswordInput {
+  token: string;
+  newPassword: string;
+}
+
 export type OAuthProvider = "google" | "github";
 
 export interface OAuthLoginInput {
@@ -61,6 +71,8 @@ export interface AuthService {
   login(input: LoginInput): Promise<AuthUser | null>;
   issueMagicLinkToken(input: MagicLinkInput): Promise<string>;
   verifyMagicLinkToken(token: string): Promise<AuthUser | null>;
+  issuePasswordResetToken(input: PasswordResetInput): Promise<string>;
+  resetPassword(input: ResetPasswordInput): Promise<boolean>;
   setUserRoles(userId: string, roles: string[]): Promise<string[]>;
   getUserRoles(userId: string): Promise<string[]>;
   loginWithOAuth(input: OAuthLoginInput): Promise<AuthUser>;

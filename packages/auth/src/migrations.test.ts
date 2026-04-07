@@ -13,6 +13,6 @@ describe("auth migrations", () => {
     const unique = new Set(ids);
     expect(unique.size).toBe(ids.length);
     expect(ids[0]).toBe("001_create_auth_users");
-    expect(ids[ids.length - 1]).toBe("008_create_auth_oauth_accounts");
+    expect(ids[ids.length - 1]).toBe("009_create_password_reset_tokens");
   });
 });

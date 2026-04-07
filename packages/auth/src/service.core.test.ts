@@ -85,25 +85,36 @@ describe("createAuthService core auth", () => {
     queue.push(
       [
         {
-          id: "u-3",
-          email: "roles@example.com",
-          password_hash: "hash",
+          id: "u-1",
+          email: "u@example.com",
+          password_hash: "x",
           name: null,
           image: null,
           email_verified_at: null,
           created_at: "2024-01-01T00:00:00.000Z",
         },
       ],
-      [{ role: "old.role" }],
       [],
       [],
-      []
+      [],
+      [{ role: "user" }, { role: "admin" }]
     );
 
     const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
-    const roles = await svc.setUserRoles("u-3", ["Billing.Write", "admin", "admin"]);
+    const roles = await svc.setUserRoles("u-1", ["ADMIN", "  user  ", "admin"]);
 
-    expect(roles).toEqual(["billing.write", "admin"]);
+    expect(roles).toEqual(["admin", "user"]);
     expect(sqlCalls.some((c) => c.text.includes("DELETE FROM auth_user_roles"))).toBe(true);
+    expect(sqlCalls.filter((c) => c.text.includes("INSERT INTO auth_user_roles")).length).toBe(2);
+  });
+
+  test("getUserRoles returns roles for user", async () => {
+    queue.push([{ role: "admin" }, { role: "editor" }]);
+
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+    const roles = await svc.getUserRoles("u-1");
+
+    expect(roles).toEqual(["admin", "editor"]);
+    expect(sqlCalls.some((c) => c.text.includes("SELECT role") && c.text.includes("FROM auth_user_roles"))).toBe(true);
   });
 });

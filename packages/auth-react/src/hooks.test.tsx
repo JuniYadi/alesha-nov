@@ -1,6 +1,6 @@
 import { describe, expect, test, beforeEach, afterEach, vi, type Mock } from "bun:test";
 import { act, renderHook, cleanup } from "@testing-library/react";
-import { useLogin, useSignup, useLogout } from "./hooks";
+import { useLogin, useSignup, useLogout, usePasswordResetRequest, useResetPassword } from "./hooks";
 import { useAuth } from "./context";
 import type { PublicUser, AuthContextValue } from "./types";
 
@@ -37,6 +37,18 @@ function setupFetch() {
       }
       if (url.includes("/logout")) {
         return new Response("{}", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/password-reset/request")) {
+        return new Response(JSON.stringify({ token: "reset-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/password-reset/reset")) {
+        return new Response(JSON.stringify({ ok: true }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -236,5 +248,113 @@ describe("useLogout", () => {
 
     expect(result.current.error).toBe("Logout failed");
     expect(refetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("usePasswordResetRequest", () => {
+  beforeEach(() => {
+    setupFetch();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("successful request sets sent=true", async () => {
+    const { result } = renderHook(() => usePasswordResetRequest());
+
+    await act(async () => {
+      await result.current.request("user@example.com");
+    });
+
+    expect(result.current.sent).toBe(true);
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("failed request sets error", async () => {
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST" && url.includes("/password-reset/request")) {
+        return new Response(JSON.stringify({ error: "User not found" }), {
+          status: 400,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHook(() => usePasswordResetRequest());
+
+    await act(async () => {
+      try {
+        await result.current.request("missing@example.com");
+      } catch {
+        // ignore
+      }
+    });
+
+    expect(result.current.sent).toBe(false);
+    expect(result.current.error).toBe("User not found");
+  });
+});
+
+describe("useResetPassword", () => {
+  beforeEach(() => {
+    setupFetch();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("successful reset sets success=true", async () => {
+    const { result } = renderHook(() => useResetPassword());
+
+    await act(async () => {
+      await result.current.reset("valid-reset-token", "new-pass-123");
+    });
+
+    expect(result.current.success).toBe(true);
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("failed reset sets error", async () => {
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST" && url.includes("/password-reset/reset")) {
+        return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(null, { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHook(() => useResetPassword());
+
+    await act(async () => {
+      try {
+        await result.current.reset("bad-token", "new-pass-123");
+      } catch {
+        // ignore
+      }
+    });
+
+    expect(result.current.success).toBe(false);
+    expect(result.current.error).toBe("Invalid or expired token");
   });
 });

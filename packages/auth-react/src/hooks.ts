@@ -115,6 +115,60 @@ export function useLogout(config: AuthApiConfig = {}) {
   return { logout, loading, error };
 }
 
+export function usePasswordResetRequest(config: AuthApiConfig = {}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const request = useCallback(
+    async (email: string) => {
+      setLoading(true);
+      setError(null);
+      setSent(false);
+      try {
+        await postJson("/password-reset/request", { email }, config);
+        setSent(true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Request failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [config],
+  );
+
+  return { request, loading, error, sent };
+}
+
+export function useResetPassword(config: AuthApiConfig = {}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  const reset = useCallback(
+    async (token: string, newPassword: string) => {
+      setLoading(true);
+      setError(null);
+      setSuccess(false);
+      try {
+        await postJson("/password-reset/reset", { token, newPassword }, config);
+        setSuccess(true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Reset failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [config],
+  );
+
+  return { reset, loading, error, success };
+}
+
 export function useAuthGuard({ redirectTo }: { redirectTo?: string } = {}) {
   const { status } = useAuth();
 

@@ -89,4 +89,55 @@ describe("createAuthService", () => {
 
     await expect(svc.setUserRoles("missing-user", ["admin"])).rejects.toThrow("User not found");
   });
+
+  test("issuePasswordResetToken throws when user does not exist", async () => {
+    queue.push([]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    await expect(svc.issuePasswordResetToken({ email: "missing@example.com" })).rejects.toThrow("User not found");
+  });
+
+  test("resetPassword returns false when token does not exist", async () => {
+    queue.push([]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    await expect(svc.resetPassword({ token: "missing", newPassword: "new-pass-123" })).resolves.toBe(false);
+  });
+
+  test("resetPassword returns false when token already used", async () => {
+    queue.push([{ user_id: "u-1", expires_at: "2999-01-01T00:00:00.000Z", used_at: "2024-01-01T00:00:00.000Z" }]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    await expect(svc.resetPassword({ token: "used-token", newPassword: "new-pass-123" })).resolves.toBe(false);
+  });
+
+  test("resetPassword returns false when token expired", async () => {
+    queue.push([{ user_id: "u-1", expires_at: "2000-01-01T00:00:00.000Z", used_at: null }]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    await expect(svc.resetPassword({ token: "expired-token", newPassword: "new-pass-123" })).resolves.toBe(false);
+  });
+
+  test("resetPassword updates password and marks token used when valid", async () => {
+    queue.push([{ user_id: "u-1", expires_at: "2999-01-01T00:00:00.000Z", used_at: null }], [], []);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const ok = await svc.resetPassword({ token: "valid-token", newPassword: "new-pass-123" });
+
+    expect(ok).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_users") && c.text.includes("password_hash"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_password_reset_tokens") && c.text.includes("SET used_at"))).toBe(true);
+  });
+
+  test("issuePasswordResetToken creates token with custom TTL", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const token = await svc.issuePasswordResetToken({ email: "user@example.com", ttlSeconds: 120 });
+
+    expect(typeof token).toBe("string");
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_password_reset_tokens"))).toBe(true);
+    const insertCall = sqlCalls.find((c) => c.text.includes("INSERT INTO auth_password_reset_tokens"));
+    expect(insertCall?.values).toContain("u-1");
+  });
 });
