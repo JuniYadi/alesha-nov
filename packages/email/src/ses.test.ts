@@ -10,7 +10,7 @@ class FakeSendEmailCommand {
 }
 
 class FakeSesClient {
-  constructor(_: unknown) {}
+  constructor() {}
 
   async send(command: FakeSendEmailCommand) {
     sendCalls.push(command.input);
