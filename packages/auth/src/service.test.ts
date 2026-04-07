@@ -128,4 +128,16 @@ describe("createAuthService", () => {
     expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_users") && c.text.includes("password_hash"))).toBe(true);
     expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_password_reset_tokens") && c.text.includes("SET used_at"))).toBe(true);
   });
+
+  test("issuePasswordResetToken creates token with custom TTL", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const token = await svc.issuePasswordResetToken({ email: "user@example.com", ttlSeconds: 120 });
+
+    expect(typeof token).toBe("string");
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_password_reset_tokens"))).toBe(true);
+    const insertCall = sqlCalls.find((c) => c.text.includes("INSERT INTO auth_password_reset_tokens"));
+    expect(insertCall?.values).toContain("u-1");
+  });
 });
