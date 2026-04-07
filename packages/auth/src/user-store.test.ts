@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 const queue: unknown[][] = [];
 
-const sqlTag = ((_: TemplateStringsArray, ...__values: unknown[]) => {
+const sqlTag = (() => {
   return Promise.resolve(queue.shift() ?? []);
 }) as unknown as (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
 
