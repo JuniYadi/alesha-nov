@@ -1,5 +1,3 @@
-# Navigation
-
 - [Home](/)
 - [Packages](packages/)
   - [@alesha-nov/config](packages/config)
