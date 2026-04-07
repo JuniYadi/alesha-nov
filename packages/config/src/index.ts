@@ -42,6 +42,28 @@ export function createDatabaseClient(config: DBConfig): DatabaseClient {
   return { sql, config };
 }
 
+export interface JWTConfig {
+  secret: string;
+  expiresIn: string | number;
+  issuer?: string;
+  audience?: string;
+}
+
+export interface SessionConfig {
+  name: string;
+  secret: string;
+  maxAge: number;
+  secure?: boolean;
+}
+
+export function resolveJWTSecret(input?: string): string {
+  const secret = input ?? process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error("JWT_SECRET is not defined");
+  }
+  return secret;
+}
+
 export async function ensureMigrationsTable(client: DatabaseClient): Promise<void> {
   const tableSql = `
     CREATE TABLE IF NOT EXISTS alesha_migrations (
