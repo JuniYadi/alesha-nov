@@ -18,18 +18,19 @@ React client toolkit for authentication state, hooks, and route guarding.
 
 ## Missing / On-going (Track Here)
 
-- [ ] OAuth client hooks (`useOAuthLogin`, `useOAuthLink`)
-- [ ] Magic link hooks (`request`, `verify`)
-- [ ] Forgot/reset password hooks
-- [ ] Session expiry proactive refresh handling
-- [ ] Router-agnostic redirect adapter (instead of `window.location.href` only)
-- [ ] Dedicated package docs under `docs/packages/auth-react.md`
+- [ ] OAuth client hooks (`useOAuthLogin`, `useOAuthLink`) — [#12](https://github.com/JuniYadi/alesha-nov/issues/12)
+- [ ] Magic link hooks (`request`, `verify`) — [#38](https://github.com/JuniYadi/alesha-nov/issues/38)
+- [ ] Session expiry proactive refresh handling — [#39](https://github.com/JuniYadi/alesha-nov/issues/39)
+- [ ] Router-agnostic redirect adapter (instead of `window.location.href` only) — [#40](https://github.com/JuniYadi/alesha-nov/issues/40)
 
-## Suggested GitHub Issues
+## Already Implemented (was previously tracked as missing)
 
-1. Add OAuth hooks for Google/GitHub login and linking
-2. Add magic-link hooks for request/verify flow
-3. Add forgot/reset password hooks
-4. Add session-expiry-aware auto refetch/refresh behavior
-5. Add pluggable navigation support for route guards
-6. Add docs page `docs/packages/auth-react.md`
+- [x] Forgot/reset password hooks (`usePasswordResetRequest`, `useResetPassword`)
+- [x] Dedicated package docs under `docs/packages/auth-react.md`
+
+## Tracking Issues
+
+- [#12](https://github.com/JuniYadi/alesha-nov/issues/12) Add OAuth hooks for Google/GitHub login and linking (@alesha-nov/auth-react)
+- [#38](https://github.com/JuniYadi/alesha-nov/issues/38) Add magic-link hooks request/verify (@alesha-nov/auth-react)
+- [#39](https://github.com/JuniYadi/alesha-nov/issues/39) Add session-expiry-aware auto refresh/refetch (@alesha-nov/auth-react)
+- [#40](https://github.com/JuniYadi/alesha-nov/issues/40) Add pluggable navigation adapter for route guards (@alesha-nov/auth-react)

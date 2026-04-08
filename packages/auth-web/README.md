@@ -25,18 +25,20 @@ HTTP auth layer built on top of `@alesha-nov/auth` with cookie session handling 
 
 ## Missing / On-going (Track Here)
 
-- [ ] OAuth redirect/callback flow endpoints (authorize + callback)
-- [ ] Forgot/reset password API endpoints
-- [ ] Email verification endpoints
-- [ ] CORS configuration options
-- [ ] Rate limiting for public auth endpoints
-- [ ] Session invalidation/revocation strategy beyond cookie clear
+- [ ] OAuth redirect/callback flow endpoints (authorize + callback) — [#11](https://github.com/JuniYadi/alesha-nov/issues/11)
+- [ ] Email verification endpoints — [#34](https://github.com/JuniYadi/alesha-nov/issues/34)
+- [ ] CORS configuration options — [#35](https://github.com/JuniYadi/alesha-nov/issues/35)
+- [ ] Rate limiting for public auth endpoints — [#36](https://github.com/JuniYadi/alesha-nov/issues/36)
+- [ ] Session invalidation/revocation strategy beyond cookie clear — [#37](https://github.com/JuniYadi/alesha-nov/issues/37)
 
-## Suggested GitHub Issues
+## Already Implemented (was previously tracked as missing)
 
-1. Add OAuth authorize + callback endpoints (Google/GitHub)
-2. Add password reset endpoints (`forgot`/`reset`)
-3. Add email verification endpoints + resend flow
-4. Add configurable CORS policy support
-5. Add built-in auth endpoint rate limiting
-6. Add server-side session revocation mechanism
+- [x] Forgot/reset password API endpoints (`/password-reset/request`, `/password-reset/reset`)
+
+## Tracking Issues
+
+- [#11](https://github.com/JuniYadi/alesha-nov/issues/11) Add OAuth authorize + callback endpoints (@alesha-nov/auth-web)
+- [#34](https://github.com/JuniYadi/alesha-nov/issues/34) Add email verification + resend endpoints (@alesha-nov/auth-web)
+- [#35](https://github.com/JuniYadi/alesha-nov/issues/35) Add configurable CORS policy support (@alesha-nov/auth-web)
+- [#36](https://github.com/JuniYadi/alesha-nov/issues/36) Add rate limiting for public auth endpoints (@alesha-nov/auth-web)
+- [#37](https://github.com/JuniYadi/alesha-nov/issues/37) Add server-side session revocation mechanism (@alesha-nov/auth-web)
