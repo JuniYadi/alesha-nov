@@ -1,7 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AuthApiConfig, LoginInput, SignupInput, PublicUser, OAuthProvider } from "./types";
+import type {
+  AuthApiConfig,
+  LoginInput,
+  SignupInput,
+  PublicUser,
+  OAuthProvider,
+  MagicLinkRequestInput,
+  MagicLinkVerifyInput,
+  UseAuthGuardOptions,
+} from "./types";
 import { useAuth } from "./context";
 
 function buildUrl(path: string, config: AuthApiConfig): string {
@@ -169,6 +178,62 @@ export function useResetPassword(config: AuthApiConfig = {}) {
   return { reset, loading, error, success };
 }
 
+export function useMagicLinkRequest(config: AuthApiConfig = {}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
+
+  const request = useCallback(
+    async (input: MagicLinkRequestInput) => {
+      setLoading(true);
+      setError(null);
+      setSent(false);
+      try {
+        await postJson<{ token: string }>("/magic-link/request", input, config);
+        setSent(true);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Magic link request failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [config],
+  );
+
+  return { request, loading, error, sent };
+}
+
+export function useMagicLinkVerify(config: AuthApiConfig = {}) {
+  const auth = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<PublicUser | null>(null);
+
+  const verify = useCallback(
+    async (input: MagicLinkVerifyInput) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await postJson<{ user: PublicUser }>("/magic-link/verify", input, config);
+        setData(res.user);
+        await auth.refetch();
+        return res.user;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Magic link verification failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [auth, config],
+  );
+
+  return { verify, data, loading, error };
+}
+
 export function useOAuthLogin(config: AuthApiConfig = {}) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -193,14 +258,32 @@ export function useOAuthLogin(config: AuthApiConfig = {}) {
   return { login, loading, error };
 }
 
-export function useAuthGuard({ redirectTo }: { redirectTo?: string } = {}) {
+export function useAuthGuard(options: UseAuthGuardOptions = {}) {
   const { status } = useAuth();
+  const { redirectTo, navigationAdapter, replace = false } = options;
 
   useEffect(() => {
-    if (status === "unauthenticated" && redirectTo) {
-      window.location.href = redirectTo;
+    if (status !== "unauthenticated" || !redirectTo) return;
+
+    if (navigationAdapter) {
+      if (replace && navigationAdapter.replace) {
+        navigationAdapter.replace(redirectTo);
+        return;
+      }
+
+      if (navigationAdapter.push) {
+        navigationAdapter.push(redirectTo);
+        return;
+      }
+
+      if (navigationAdapter.replace) {
+        navigationAdapter.replace(redirectTo);
+        return;
+      }
     }
-  }, [status, redirectTo]);
+
+    window.location.assign(redirectTo);
+  }, [status, redirectTo, navigationAdapter, replace]);
 
   return {
     isLoading: status === "loading",
