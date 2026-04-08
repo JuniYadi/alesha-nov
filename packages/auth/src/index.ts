@@ -5,6 +5,7 @@ export { buildAuthUser, getUserById, getUserRolesInternal } from "./user-store";
 export type {
   AuthService,
   AuthUser,
+  EmailVerificationInput,
   LinkOAuthAccountInput,
   LoginInput,
   MagicLinkInput,

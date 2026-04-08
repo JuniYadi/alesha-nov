@@ -94,4 +94,17 @@ export const authMigrations: Migration[] = [
       )
     `,
   },
+  {
+    id: "010_create_email_verification_tokens",
+    sql: `
+      CREATE TABLE IF NOT EXISTS auth_email_verification_tokens (
+        token_hash VARCHAR(128) PRIMARY KEY,
+        user_id VARCHAR(36) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        used_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES auth_users(id) ON DELETE CASCADE
+      )
+    `,
+  },
 ];

@@ -80,6 +80,25 @@ const makeAuthService = () => ({
       updatedAt: "2024-01-01T00:00:00.000Z",
     },
   ],
+  issueEmailVerificationToken: async ({ email }: { email: string }) => {
+    if (email === "missing@example.com") throw new Error("User not found");
+    return "email-verification-token";
+  },
+  verifyEmailVerificationToken: async (token: string) => {
+    if (token === "valid-email-token") {
+      return {
+        id: "u-1",
+        email: "verified@example.com",
+        passwordHash: "hashed",
+        name: "Verified",
+        image: null,
+        emailVerifiedAt: new Date().toISOString(),
+        roles: [],
+        createdAt: "2024-01-01T00:00:00.000Z",
+      };
+    }
+    return null;
+  },
 });
 
 describe("createAuthWeb", () => {
@@ -781,6 +800,139 @@ describe("secureCookie option", () => {
     expect(response.status).toBe(200);
     const cookie = response.headers.get("set-cookie") ?? "";
     expect(cookie).toContain("Secure");
+  });
+});
+
+describe("POST /email-verification/request", () => {
+  test("returns token when issueEmailVerificationToken succeeds", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.com" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { token: string };
+    expect(body.token).toBe("email-verification-token");
+  });
+
+  test("returns 400 when issueEmailVerificationToken throws (user not found)", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "missing@example.com" }),
+      })
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  test("returns 429 when rate limit is exceeded", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      rateLimit: { windowSeconds: 60, maxRequests: 1 },
+    });
+
+    const res1 = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.com" }),
+      })
+    );
+    expect(res1.status).toBe(200);
+
+    const res2 = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/request", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "user@example.com" }),
+      })
+    );
+    expect(res2.status).toBe(429);
+  });
+});
+
+describe("POST /email-verification/verify", () => {
+  test("returns user when token is valid", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "valid-email-token" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { user: Record<string, unknown> };
+    expect(body.user.email).toBe("verified@example.com");
+    expect(body.user.passwordHash).toBeUndefined();
+  });
+
+  test("returns 401 when token is invalid or expired", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "bad-token" }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  test("returns 429 when rate limit is exceeded", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      rateLimit: { windowSeconds: 60, maxRequests: 1 },
+    });
+
+    const res1 = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "valid-email-token" }),
+      })
+    );
+    expect(res1.status).toBe(200);
+
+    const res2 = await app.handleRequest(
+      new Request("http://localhost/auth/email-verification/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: "valid-email-token" }),
+      })
+    );
+    expect(res2.status).toBe(429);
   });
 });
 

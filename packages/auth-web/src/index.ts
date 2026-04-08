@@ -402,6 +402,29 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         return json(200, { ok: true });
       }
 
+      if (method === "POST" && subPath === "/email-verification/request") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
+        const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
+        const token = await options.authService.issueEmailVerificationToken({
+          email: body.email,
+          ttlSeconds: body.ttlSeconds,
+        });
+
+        return json(200, { token });
+      }
+
+      if (method === "POST" && subPath === "/email-verification/verify") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
+        const body = await safeJson<{ token: string }>(request);
+        const user = await options.authService.verifyEmailVerificationToken(body.token);
+        if (!user) return json(401, { error: "Invalid or expired token" });
+
+        const publicUser = toPublicUser(user);
+        return json(200, { user: publicUser });
+      }
+
       if (method === "GET" && subPath.startsWith("/oauth/") && subPath.endsWith("/authorize")) {
         const provider = subPath.split("/")[2] as OAuthProvider;
 

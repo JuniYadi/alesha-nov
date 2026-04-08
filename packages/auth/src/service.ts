@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { authMigrations } from "./migrations";
 import type {
   AuthService,
+  EmailVerificationInput,
   LinkOAuthAccountInput,
   LoginInput,
   MagicLinkInput,
@@ -181,6 +182,79 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
       `;
 
       return true;
+    },
+
+    async issueEmailVerificationToken(input: EmailVerificationInput) {
+      const rows = await client.sql`
+        SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
+      `;
+      const user = rows[0] as { id: string } | undefined;
+      if (!user) throw new Error("User not found");
+
+      const rawToken = randomBytes(32).toString("base64url");
+      const tokenHash = hashToken(rawToken);
+      const ttlSeconds = input.ttlSeconds ?? 60 * 60; // 1 hour default
+      const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
+
+      await client.sql`
+        INSERT INTO auth_email_verification_tokens (token_hash, user_id, expires_at)
+        VALUES (${tokenHash}, ${user.id}, ${expiresAt})
+      `;
+
+      return rawToken;
+    },
+
+    async verifyEmailVerificationToken(token: string) {
+      const tokenHash = hashToken(token);
+      const rows = await client.sql`
+        SELECT aevt.user_id, aevt.expires_at, aevt.used_at,
+               u.id, u.email, u.password_hash, u.name, u.image, u.email_verified_at, u.created_at
+        FROM auth_email_verification_tokens aevt
+        JOIN auth_users u ON u.id = aevt.user_id
+        WHERE aevt.token_hash = ${tokenHash}
+        LIMIT 1
+      `;
+
+      const row = rows[0] as
+        | {
+            user_id: string;
+            expires_at: string;
+            used_at: string | null;
+            id: string;
+            email: string;
+            password_hash: string;
+            name: string | null;
+            image: string | null;
+            email_verified_at: string | null;
+            created_at: string;
+          }
+        | undefined;
+
+      if (!row) return null;
+      if (row.used_at) return null;
+      if (new Date(row.expires_at).getTime() < Date.now()) return null;
+
+      await client.sql`
+        UPDATE auth_email_verification_tokens
+        SET used_at = ${new Date().toISOString()}
+        WHERE token_hash = ${tokenHash}
+      `;
+
+      await client.sql`
+        UPDATE auth_users
+        SET email_verified_at = COALESCE(email_verified_at, ${new Date().toISOString()})
+        WHERE id = ${row.id}
+      `;
+
+      return buildAuthUser(client, {
+        id: row.id,
+        email: row.email,
+        password_hash: row.password_hash,
+        name: row.name,
+        image: row.image,
+        email_verified_at: row.email_verified_at,
+        created_at: row.created_at,
+      });
     },
 
     async setUserRoles(userId: string, roles: string[]) {
