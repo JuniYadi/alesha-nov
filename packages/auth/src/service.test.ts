@@ -140,4 +140,103 @@ describe("createAuthService", () => {
     const insertCall = sqlCalls.find((c) => c.text.includes("INSERT INTO auth_password_reset_tokens"));
     expect(insertCall?.values).toContain("u-1");
   });
+
+  test("issueEmailVerificationToken throws when user does not exist", async () => {
+    queue.push([]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    await expect(svc.issueEmailVerificationToken({ email: "missing@example.com" })).rejects.toThrow("User not found");
+  });
+
+  test("issueEmailVerificationToken creates token with default TTL", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const token = await svc.issueEmailVerificationToken({ email: "user@example.com" });
+
+    expect(typeof token).toBe("string");
+    const insertCall = sqlCalls.find((c) => c.text.includes("INSERT INTO auth_email_verification_tokens"));
+    expect(insertCall).toBeDefined();
+    expect(insertCall?.values).toContain("u-1");
+  });
+
+  test("verifyEmailVerificationToken returns null when token not found", async () => {
+    queue.push([]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const user = await svc.verifyEmailVerificationToken("missing-token");
+    expect(user).toBeNull();
+  });
+
+  test("verifyEmailVerificationToken returns null when token already used", async () => {
+    queue.push([
+      {
+        user_id: "u-1",
+        expires_at: "2999-01-01T00:00:00.000Z",
+        used_at: "2024-01-01T00:00:00.000Z",
+        id: "u-1",
+        email: "user@example.com",
+        password_hash: "hash",
+        name: null,
+        image: null,
+        email_verified_at: null,
+        created_at: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const user = await svc.verifyEmailVerificationToken("used-token");
+    expect(user).toBeNull();
+  });
+
+  test("verifyEmailVerificationToken returns null when token expired", async () => {
+    queue.push([
+      {
+        user_id: "u-1",
+        expires_at: "2000-01-01T00:00:00.000Z",
+        used_at: null,
+        id: "u-1",
+        email: "user@example.com",
+        password_hash: "hash",
+        name: null,
+        image: null,
+        email_verified_at: null,
+        created_at: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const user = await svc.verifyEmailVerificationToken("expired-token");
+    expect(user).toBeNull();
+  });
+
+  test("verifyEmailVerificationToken marks token used, updates user, and returns hydrated user", async () => {
+    queue.push(
+      [
+        {
+          user_id: "u-1",
+          expires_at: "2999-01-01T00:00:00.000Z",
+          used_at: null,
+          id: "u-1",
+          email: "user@example.com",
+          password_hash: "hash",
+          name: "User",
+          image: null,
+          email_verified_at: null,
+          created_at: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+      [],
+      [],
+      [{ role: "admin" }]
+    );
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const user = await svc.verifyEmailVerificationToken("valid-token");
+
+    expect(user).not.toBeNull();
+    expect(user?.id).toBe("u-1");
+    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_email_verification_tokens") && c.text.includes("SET used_at"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_users") && c.text.includes("email_verified_at"))).toBe(true);
+  });
 });

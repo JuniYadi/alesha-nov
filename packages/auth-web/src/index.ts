@@ -441,6 +441,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
             maxAge: sessionTtlSeconds,
             secure: secureCookie,
           }),
+          ...responseCorsHeaders,
         });
       }
 
@@ -458,6 +459,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
             maxAge: sessionTtlSeconds,
             secure: secureCookie,
           }),
+          ...responseCorsHeaders,
         });
       }
 
@@ -542,6 +544,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
             maxAge: sessionTtlSeconds,
             secure: secureCookie,
           }),
+          ...responseCorsHeaders,
         });
       }
 
@@ -727,6 +730,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
             maxAge: sessionTtlSeconds,
             secure: secureCookie,
           }),
+          ...responseCorsHeaders,
         });
       }
 

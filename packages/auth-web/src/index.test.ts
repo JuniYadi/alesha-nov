@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createAuthWeb, getSessionFromRequest, type RateLimiter } from "./index";
+import { createAuthWeb, getSessionFromRequest, revokeAllUserTokens, revokeSession, type RateLimiter } from "./index";
 
 const makeAuthService = () => ({
   signup: async (input: { email: string; name?: string; image?: string; roles?: string[] }) => ({
@@ -991,6 +991,190 @@ describe("POST /email-verification/verify", () => {
       })
     );
     expect(res2.status).toBe(429);
+  });
+});
+
+describe("CORS behavior", () => {
+  test("OPTIONS preflight returns 204 with allow headers for allowed origin", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      cors: {
+        allowedOrigins: ["https://app.example.com"],
+        allowedMethods: ["GET", "POST", "OPTIONS"],
+        allowedHeaders: ["content-type", "authorization"],
+        allowCredentials: true,
+        maxAge: 600,
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/session", {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://app.example.com",
+          "access-control-request-method": "POST",
+          "access-control-request-headers": "content-type,authorization",
+        },
+      })
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(response.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(response.headers.get("access-control-allow-headers")).toBe("content-type,authorization");
+    expect(response.headers.get("access-control-max-age")).toBe("600");
+  });
+
+  test("OPTIONS preflight returns 403 for disallowed origin", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      cors: {
+        allowedOrigins: ["https://app.example.com"],
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/session", {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://evil.example.com",
+          "access-control-request-method": "GET",
+        },
+      })
+    );
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe("CORS not allowed");
+  });
+
+  test("wildcard origin returns '*' and omits credentials", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      cors: {
+        allowedOrigins: "*",
+        allowCredentials: true,
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/session", {
+        method: "OPTIONS",
+        headers: {
+          origin: "https://any.example.com",
+          "access-control-request-method": "GET",
+        },
+      })
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-allow-credentials")).toBeNull();
+  });
+
+  test("non-OPTIONS response includes simple CORS headers", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+      cors: {
+        allowedOrigins: ["https://app.example.com"],
+        allowCredentials: true,
+      },
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: {
+          origin: "https://app.example.com",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("access-control-allow-origin")).toBe("https://app.example.com");
+    expect(response.headers.get("access-control-allow-credentials")).toBe("true");
+  });
+});
+
+describe("session revocation helpers", () => {
+  test("revokeSession invalidates token for getSessionFromRequest", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const loginResp = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const setCookie = loginResp.headers.get("set-cookie") ?? "";
+    const token = setCookie.split(";")[0]?.split("=")[1] ?? "";
+    expect(token).not.toBe("");
+
+    const before = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", { headers: { cookie: `alesha_auth=${token}` } }),
+      "0123456789abcdef"
+    );
+    expect(before).not.toBeNull();
+
+    revokeSession(token);
+
+    const after = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", { headers: { cookie: `alesha_auth=${token}` } }),
+      "0123456789abcdef"
+    );
+    expect(after).toBeNull();
+  });
+
+  test("revokeAllUserTokens invalidates all listed tokens", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const login = async () => {
+      const res = await app.handleRequest(
+        new Request("http://localhost/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+        })
+      );
+      return (res.headers.get("set-cookie") ?? "").split(";")[0]?.split("=")[1] ?? "";
+    };
+
+    const token1 = await login();
+    const token2 = await login();
+    expect(token1).not.toBe("");
+    expect(token2).not.toBe("");
+
+    revokeAllUserTokens("u-1", [token1, token2]);
+
+    const s1 = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", { headers: { cookie: `alesha_auth=${token1}` } }),
+      "0123456789abcdef"
+    );
+    const s2 = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", { headers: { cookie: `alesha_auth=${token2}` } }),
+      "0123456789abcdef"
+    );
+
+    expect(s1).toBeNull();
+    expect(s2).toBeNull();
   });
 });
 
