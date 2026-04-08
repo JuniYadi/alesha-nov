@@ -125,7 +125,7 @@ export interface RetryOptions {
   maxAttempts: number;
   initialDelayMs: number;
   maxDelayMs: number;
-  shouldRetry?: (error: any) => boolean;
+  shouldRetry?: (error: unknown) => boolean;
 }
 
 export function withRetry(provider: EmailProvider, options: RetryOptions): EmailProvider {
@@ -134,7 +134,7 @@ export function withRetry(provider: EmailProvider, options: RetryOptions): Email
   return {
     async send(message) {
       let attempt = 0;
-      let lastError: any;
+      let lastError: unknown;
 
       while (attempt < options.maxAttempts) {
         try {

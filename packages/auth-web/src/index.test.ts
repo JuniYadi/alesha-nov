@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createAuthWeb, getSessionFromRequest } from "./index";
+import { createAuthWeb, getSessionFromRequest, type RateLimiter } from "./index";
 
 const makeAuthService = () => ({
   signup: async (input: { email: string; name?: string; image?: string; roles?: string[] }) => ({
@@ -455,7 +455,7 @@ describe("POST /password-reset/reset", () => {
   });
 
   test("rate limiting works with custom limiter", async () => {
-    const limiter: any = {
+    const limiter: RateLimiter = {
       consume: async () => ({ success: false, limit: 10, remaining: 0, reset: 123 }),
     };
     const app = createAuthWeb({
