@@ -120,3 +120,42 @@ export function createTokenWithMetadata(token: string, ttlSeconds: number): Toke
     expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
   };
 }
+
+export interface RetryOptions {
+  maxAttempts: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  shouldRetry?: (error: any) => boolean;
+}
+
+export function withRetry(provider: EmailProvider, options: RetryOptions): EmailProvider {
+  const shouldRetry = options.shouldRetry ?? (() => true);
+
+  return {
+    async send(message) {
+      let attempt = 0;
+      let lastError: any;
+
+      while (attempt < options.maxAttempts) {
+        try {
+          return await provider.send(message);
+        } catch (error) {
+          lastError = error;
+          attempt++;
+
+          if (attempt >= options.maxAttempts || !shouldRetry(error)) {
+            break;
+          }
+
+          const delay = Math.min(
+            options.maxDelayMs,
+            options.initialDelayMs * Math.pow(2, attempt - 1)
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      throw lastError;
+    },
+  };
+}
