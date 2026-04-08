@@ -11,13 +11,14 @@ describe("auth-react exports", () => {
   });
 
   test("hooks exports are defined", async () => {
-    const { useSignup, useLogin, useLogout, usePasswordResetRequest, useResetPassword, useAuthGuard } = await import("./hooks");
+    const { useSignup, useLogin, useLogout, usePasswordResetRequest, useResetPassword, useOAuthLogin, useAuthGuard } = await import("./hooks");
 
     expect(useSignup).toBeDefined();
     expect(useLogin).toBeDefined();
     expect(useLogout).toBeDefined();
     expect(usePasswordResetRequest).toBeDefined();
     expect(useResetPassword).toBeDefined();
+    expect(useOAuthLogin).toBeDefined();
     expect(useAuthGuard).toBeDefined();
   });
 

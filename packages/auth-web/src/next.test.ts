@@ -32,4 +32,17 @@ describe("createNextAuthHandlers", () => {
     expect(typeof handlers.DELETE).toBe("function");
     expect(typeof handlers.PATCH).toBe("function");
   });
+
+  test("delegates method handlers to auth-web router", async () => {
+    const handlers = createNextAuthHandlers({
+      authService,
+      sessionSecret: "0123456789abcdef",
+    });
+
+    const getResponse = await handlers.GET(new Request("http://localhost/auth/session", { method: "GET" }));
+    expect(getResponse.status).toBe(401);
+
+    const postResponse = await handlers.POST(new Request("http://localhost/auth/logout", { method: "POST" }));
+    expect(postResponse.status).toBe(200);
+  });
 });

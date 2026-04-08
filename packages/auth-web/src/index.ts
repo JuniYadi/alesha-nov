@@ -7,7 +7,16 @@ import {
   type OAuthProvider,
   type SignupInput,
 } from "@alesha-nov/auth";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
+export interface OAuthCallbackProfile {
+  providerAccountId: string;
+  email: string;
+  name?: string;
+  image?: string;
+  emailVerified?: boolean;
+  roles?: string[];
+}
 
 export interface AuthWebOptions {
   authService: AuthService;
@@ -18,6 +27,21 @@ export interface AuthWebOptions {
   secureCookie?: boolean;
   /* Optional: resolve a user by ID for GET /me. */
   getUser?: (userId: string) => Promise<AuthUser | null>;
+  /* Optional: build provider authorize URL for GET /oauth/:provider/authorize. */
+  getOAuthAuthorizeUrl?: (input: {
+    provider: OAuthProvider;
+    state: string;
+    redirectUri: string;
+    request: Request;
+  }) => string | Promise<string>;
+  /* Optional: exchange callback params into OAuth identity profile. */
+  completeOAuthCallback?: (input: {
+    provider: OAuthProvider;
+    code: string;
+    state: string;
+    redirectUri: string;
+    request: Request;
+  }) => OAuthCallbackProfile | Promise<OAuthCallbackProfile>;
 }
 
 export interface AuthSession {
@@ -99,6 +123,34 @@ function parseCookies(request: Request): Record<string, string> {
     out[k] = rest.join("=");
   }
   return out;
+}
+
+function appendSetCookie(headers: Record<string, string> | undefined, cookie: string): Record<string, string> {
+  if (!headers) return { "set-cookie": cookie };
+  const existing = headers["set-cookie"];
+  if (!existing) return { ...headers, "set-cookie": cookie };
+  return { ...headers, "set-cookie": `${existing}, ${cookie}` };
+}
+
+function resolveOAuthRedirectUri(request: Request, provider: OAuthProvider, basePath: string): string {
+  const incoming = new URL(request.url);
+  return `${incoming.origin}${basePath}/oauth/${provider}/callback`;
+}
+
+function oauthStateCookieName(provider: OAuthProvider): string {
+  return `alesha_oauth_state_${provider}`;
+}
+
+function decodeOAuthState(value: string): string | null {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+}
+
+function generateOAuthState(): string {
+  return b64url(randomBytes(24));
 }
 
 async function safeJson<T = Record<string, unknown>>(request: Request): Promise<T> {
@@ -276,6 +328,98 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
 
         if (!ok) return json(401, { error: "Invalid or expired token" });
         return json(200, { ok: true });
+      }
+
+      if (method === "GET" && subPath.startsWith("/oauth/") && subPath.endsWith("/authorize")) {
+        const provider = subPath.split("/")[2] as OAuthProvider;
+
+        if (!options.getOAuthAuthorizeUrl) {
+          return json(501, { error: "OAuth authorize flow is not configured" });
+        }
+
+        const state = generateOAuthState();
+        const redirectUri = resolveOAuthRedirectUri(request, provider, basePath);
+        const location = await options.getOAuthAuthorizeUrl({
+          provider,
+          state,
+          redirectUri,
+          request,
+        });
+
+        const stateCookie = serializeCookie(oauthStateCookieName(provider), encodeURIComponent(state), {
+          maxAge: 60 * 10,
+          secure: secureCookie,
+        });
+
+        return new Response(null, {
+          status: 302,
+          headers: {
+            location,
+            "set-cookie": stateCookie,
+          },
+        });
+      }
+
+      if (method === "GET" && subPath.startsWith("/oauth/") && subPath.endsWith("/callback")) {
+        const provider = subPath.split("/")[2] as OAuthProvider;
+
+        if (!options.completeOAuthCallback) {
+          return json(501, { error: "OAuth callback flow is not configured" });
+        }
+
+        const callbackUrl = new URL(request.url);
+        const code = callbackUrl.searchParams.get("code")?.trim();
+        const receivedState = callbackUrl.searchParams.get("state")?.trim();
+        if (!code || !receivedState) {
+          return json(400, { error: "Missing OAuth callback code or state" });
+        }
+
+        const cookies = parseCookies(request);
+        const expectedStateRaw = cookies[oauthStateCookieName(provider)];
+        const expectedState = expectedStateRaw ? decodeOAuthState(expectedStateRaw) : null;
+        if (!expectedState || expectedState !== receivedState) {
+          return json(400, { error: "Invalid OAuth state" });
+        }
+
+        const redirectUri = resolveOAuthRedirectUri(request, provider, basePath);
+        const oauthProfile = await options.completeOAuthCallback({
+          provider,
+          code,
+          state: receivedState,
+          redirectUri,
+          request,
+        });
+
+        const user = await options.authService.loginWithOAuth({
+          provider,
+          providerAccountId: oauthProfile.providerAccountId,
+          email: oauthProfile.email,
+          name: oauthProfile.name,
+          image: oauthProfile.image,
+          emailVerified: oauthProfile.emailVerified,
+          roles: oauthProfile.roles,
+        });
+
+        const publicUser = toPublicUser(user);
+        const session = newSession(publicUser);
+        const clearStateCookie = serializeCookie(oauthStateCookieName(provider), "", {
+          maxAge: 0,
+          secure: secureCookie,
+        });
+
+        return json(
+          200,
+          { user: publicUser },
+          appendSetCookie(
+            {
+              "set-cookie": serializeCookie(cookieName, sessionCookieValue(session), {
+                maxAge: sessionTtlSeconds,
+                secure: secureCookie,
+              }),
+            },
+            clearStateCookie,
+          ),
+        );
       }
 
       if (method === "POST" && subPath.startsWith("/oauth/") && subPath.endsWith("/login")) {
