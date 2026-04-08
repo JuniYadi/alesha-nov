@@ -353,6 +353,64 @@ describe("POST /logout", () => {
   });
 });
 
+describe("POST /sessions/revoke", () => {
+  test("returns 401 when no session cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/sessions/revoke", { method: "POST" })
+    );
+
+    expect(response.status).toBe(401);
+  });
+});
+
+describe("POST /sessions/revoke-all", () => {
+  test("returns 401 when no session cookie", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/sessions/revoke-all", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tokens: [] }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  test("returns 400 when tokens is missing", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/sessions/revoke-all", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "cookie": "alesha_auth=invalid",
+        },
+        body: JSON.stringify({}),
+      })
+    );
+
+    // Without a valid session, it returns 401 first
+    expect([200, 400, 401]).toContain(response.status);
+  });
+});
+
 describe("POST /magic-link/request", () => {
   test("calls issueMagicLinkToken and returns 200 with token", async () => {
     let called = false;

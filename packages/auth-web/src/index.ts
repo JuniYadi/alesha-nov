@@ -6,6 +6,7 @@ import {
   type OAuthLoginInput,
   type OAuthProvider,
   type SignupInput,
+  newId,
 } from "@alesha-nov/auth";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
@@ -74,6 +75,7 @@ export interface CorsOptions {
 
 export interface AuthSession {
   userId: string;
+  sessionId: string;
   email: string;
   roles: string[];
   exp: number;
@@ -108,6 +110,13 @@ function sign(payload: string, secret: string): string {
   return b64url(createHmac("sha256", secret).update(payload).digest());
 }
 
+// In-memory revocation list: hashed sessionId → revocation timestamp
+const revokedSessions = new Map<string, number>();
+
+function hashToken(token: string): string {
+  return Buffer.from(token, "utf-8").toString("hex");
+}
+
 function createSessionToken(session: AuthSession, secret: string): string {
   const payload = b64url(JSON.stringify(session));
   const sig = sign(payload, secret);
@@ -124,7 +133,23 @@ function verifySessionToken(token: string, secret: string): AuthSession | null {
 
   const parsed = JSON.parse(b64urlDecode(payload)) as AuthSession;
   if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) return null;
+
+  // Check revocation list
+  const tokenHash = hashToken(token);
+  const revokedAt = revokedSessions.get(tokenHash);
+  if (revokedAt !== undefined) return null;
+
   return parsed;
+}
+
+export function revokeSession(token: string): void {
+  revokedSessions.set(hashToken(token), Date.now());
+}
+
+export function revokeAllUserTokens(_userId: string, allTokens: string[]): void {
+  for (const tok of allTokens) {
+    revokedSessions.set(hashToken(tok), Date.now());
+  }
 }
 
 function serializeCookie(name: string, value: string, options: { maxAge?: number; secure?: boolean }): string {
@@ -335,6 +360,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
   function newSession(user: Omit<AuthUser, "passwordHash">): AuthSession {
     return {
       userId: user.id,
+      sessionId: newId(),
       email: user.email,
       roles: user.roles,
       exp: Math.floor(Date.now() / 1000) + sessionTtlSeconds,
@@ -426,12 +452,38 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/logout") {
+        const session = getSessionFromRequest(request);
+        if (session) {
+          const cookies = parseCookies(request);
+          const token = cookies[cookieName];
+          if (token) revokeSession(token);
+        }
         return json(200, { ok: true }, {
           "set-cookie": serializeCookie(cookieName, "", {
             maxAge: 0,
             secure: secureCookie,
           }),
         });
+      }
+
+      if (method === "POST" && subPath === "/sessions/revoke") {
+        const session = getSessionFromRequest(request);
+        if (!session) return json(401, { error: "Unauthorized" }, responseCorsHeaders);
+        const cookies = parseCookies(request);
+        const token = cookies[cookieName];
+        if (token) revokeSession(token);
+        return json(200, { ok: true }, responseCorsHeaders);
+      }
+
+      if (method === "POST" && subPath === "/sessions/revoke-all") {
+        const session = getSessionFromRequest(request);
+        if (!session) return json(401, { error: "Unauthorized" }, responseCorsHeaders);
+        const body = await safeJson<{ tokens: string[] }>(request);
+        if (!body.tokens || !Array.isArray(body.tokens)) {
+          return json(400, { error: "tokens array is required" }, responseCorsHeaders);
+        }
+        revokeAllUserTokens(session.userId, body.tokens);
+        return json(200, { ok: true }, responseCorsHeaders);
       }
 
       if (method === "GET" && subPath === "/session") {
