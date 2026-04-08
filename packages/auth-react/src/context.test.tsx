@@ -23,7 +23,8 @@ const mockUser: PublicUser = {
 
 // Track fetch calls for assertion
 const fetchCalls: Array<{ url: string; options?: RequestInit }> = [];
-let fetchMock: typeof fetch;
+const originalFetch = globalThis.fetch;
+let fetchMock: ReturnType<typeof vi.fn>;
 
 function setupFetch() {
   fetchCalls.length = 0;
@@ -35,9 +36,7 @@ function setupFetch() {
 }
 
 function restoreFetch() {
-  if (fetchMock) {
-    Object.defineProperty(globalThis, "fetch", { value: fetchMock, writable: true, configurable: true });
-  }
+  Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
 }
 
 function DummyChild() {

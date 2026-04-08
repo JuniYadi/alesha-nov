@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 const mockSession = { userId: "u-1", email: "x", roles: [], exp: Math.floor(Date.now() / 1000) + 3600 };
 const mockUser = { id: "u-1", email: "x", name: null, image: null, emailVerifiedAt: null, createdAt: "", roles: [] };
 
+const originalFetch = globalThis.fetch;
 let fetchMock: ReturnType<typeof vi.fn>;
 
 function setupAuthFetch(status: "authenticated" | "unauthenticated" = "authenticated") {
@@ -49,6 +50,7 @@ function LoadingProvider({ children }: { children: ReactNode }) {
 describe("AuthGuard", () => {
   afterEach(() => {
     cleanup();
+    Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
   });
 
   test("renders null when loading and no fallback provided", async () => {
