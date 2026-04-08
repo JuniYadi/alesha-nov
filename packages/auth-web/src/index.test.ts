@@ -426,6 +426,55 @@ describe("POST /password-reset/reset", () => {
     expect(body.ok).toBe(true);
   });
 
+  test("rate limiting triggers 429 when limit reached", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      rateLimit: { windowSeconds: 60, maxRequests: 1 },
+    });
+
+    const req1 = new Request("http://localhost/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+    });
+    const res1 = await app.handleRequest(req1);
+    expect(res1.status).toBe(200);
+
+    const req2 = new Request("http://localhost/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+    });
+    const res2 = await app.handleRequest(req2);
+    expect(res2.status).toBe(429);
+    expect(await res2.json()).toEqual({ error: "Too many requests" });
+    expect(res2.headers.get("x-ratelimit-limit")).toBe("1");
+    expect(res2.headers.get("x-ratelimit-remaining")).toBe("0");
+    expect(res2.headers.get("retry-after")).toBeDefined();
+  });
+
+  test("rate limiting works with custom limiter", async () => {
+    const limiter: any = {
+      consume: async () => ({ success: false, limit: 10, remaining: 0, reset: 123 }),
+    };
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      rateLimit: limiter,
+    });
+
+    const res = await app.handleRequest(
+      new Request("http://localhost/auth/signup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "x@x.com", password: "x" }),
+      })
+    );
+    expect(res.status).toBe(429);
+    expect(res.headers.get("x-ratelimit-reset")).toBe("123");
+  });
+
   test("returns 401 when resetPassword fails", async () => {
     const app = createAuthWeb({
       sessionSecret: "0123456789abcdef",
