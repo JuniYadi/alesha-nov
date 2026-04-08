@@ -187,9 +187,16 @@ jobs:
         if: needs.lint.outputs.auth_web == 'true'
         run: bun run --filter @alesha-nov/auth-web build
 
-      - name: Build @alesha-nov/auth-react
+      - name: Build @alesha-nov/auth-react (if build script exists)
         if: needs.lint.outputs.auth_react == 'true'
-        run: bun run --filter @alesha-nov/auth-react build
+        shell: bash
+        run: |
+          set -euo pipefail
+          if node -e 'const p=require("./packages/auth-react/package.json"); process.exit(p.scripts && p.scripts.build ? 0 : 1)'; then
+            bun run --filter @alesha-nov/auth-react build
+          else
+            echo "No build script for @alesha-nov/auth-react, skipping build step."
+          fi
 
       - name: Unit test + coverage (affected packages)
         if: needs.lint.outputs.any_changed == 'true'
