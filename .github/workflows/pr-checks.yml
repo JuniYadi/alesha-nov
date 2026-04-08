@@ -16,6 +16,7 @@ jobs:
       email: ${{ steps.affected.outputs.email }}
       auth: ${{ steps.affected.outputs.auth }}
       auth_web: ${{ steps.affected.outputs.auth_web }}
+      auth_react: ${{ steps.affected.outputs.auth_react }}
 
     steps:
       - name: Checkout
@@ -41,6 +42,7 @@ jobs:
           email=false
           auth=false
           auth_web=false
+          auth_react=false
           all=false
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
@@ -57,6 +59,7 @@ jobs:
                 packages/email/*) email=true ;;
                 packages/auth/*) auth=true ;;
                 packages/auth-web/*) auth_web=true ;;
+                packages/auth-react/*) auth_react=true ;;
                 bun.lock|package.json|tsconfig.base.json|eslint.config.*)
                   all=true
                   ;;
@@ -69,6 +72,7 @@ jobs:
             email=true
             auth=true
             auth_web=true
+            auth_react=true
           fi
 
           # Dependency propagation (both directions for CI build/test correctness):
@@ -81,18 +85,32 @@ jobs:
             config=true
           fi
 
+          # auth-react depends on auth-web -> auth -> config
+          if [[ "$auth_react" == "true" ]]; then
+            auth_web=true
+            auth=true
+            config=true
+          fi
+
           # Downstream impact for package-change fanout:
-          # config impacts auth + auth-web, auth impacts auth-web
+          # config impacts auth + auth-web + auth-react,
+          # auth impacts auth-web + auth-react,
+          # auth-web impacts auth-react
           if [[ "$config" == "true" ]]; then
             auth=true
             auth_web=true
+            auth_react=true
           fi
           if [[ "$auth" == "true" ]]; then
             auth_web=true
+            auth_react=true
+          fi
+          if [[ "$auth_web" == "true" ]]; then
+            auth_react=true
           fi
 
           any_changed=false
-          if [[ "$config" == "true" || "$email" == "true" || "$auth" == "true" || "$auth_web" == "true" ]]; then
+          if [[ "$config" == "true" || "$email" == "true" || "$auth" == "true" || "$auth_web" == "true" || "$auth_react" == "true" ]]; then
             any_changed=true
           fi
 
@@ -102,9 +120,10 @@ jobs:
             echo "email=$email"
             echo "auth=$auth"
             echo "auth_web=$auth_web"
+            echo "auth_react=$auth_react"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Affected packages: config=$config email=$email auth=$auth auth_web=$auth_web"
+          echo "Affected packages: config=$config email=$email auth=$auth auth_web=$auth_web auth_react=$auth_react"
 
       - name: Lint @alesha-nov/config
         if: steps.affected.outputs.config == 'true'
@@ -121,6 +140,10 @@ jobs:
       - name: Lint @alesha-nov/auth-web
         if: steps.affected.outputs.auth_web == 'true'
         run: bun run --filter @alesha-nov/auth-web lint
+
+      - name: Lint @alesha-nov/auth-react
+        if: steps.affected.outputs.auth_react == 'true'
+        run: bun run --filter @alesha-nov/auth-react lint
 
       - name: No package changes detected
         if: steps.affected.outputs.any_changed != 'true'
@@ -164,6 +187,10 @@ jobs:
         if: needs.lint.outputs.auth_web == 'true'
         run: bun run --filter @alesha-nov/auth-web build
 
+      - name: Build @alesha-nov/auth-react
+        if: needs.lint.outputs.auth_react == 'true'
+        run: bun run --filter @alesha-nov/auth-react build
+
       - name: Unit test + coverage (affected packages)
         if: needs.lint.outputs.any_changed == 'true'
         shell: bash
@@ -182,6 +209,9 @@ jobs:
           fi
           if [[ "${{ needs.lint.outputs.auth_web }}" == "true" ]]; then
             targets+=("packages/auth-web/src")
+          fi
+          if [[ "${{ needs.lint.outputs.auth_react }}" == "true" ]]; then
+            targets+=("packages/auth-react/src")
           fi
 
           echo "Coverage targets: ${targets[*]}"
