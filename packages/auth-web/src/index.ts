@@ -55,6 +55,21 @@ export interface AuthWebOptions {
     redirectUri: string;
     request: Request;
   }) => OAuthCallbackProfile | Promise<OAuthCallbackProfile>;
+  /* Optional: CORS configuration. When omitted, CORS headers are not added. */
+  cors?: CorsOptions;
+}
+
+export interface CorsOptions {
+  /** Comma-separated or array of allowed origin(s). Use '*' for any origin (no credentials). */
+  allowedOrigins: string | string[];
+  /** Comma-separated or array of allowed HTTP methods. Defaults to GET,POST,PUT,DELETE,OPTIONS. */
+  allowedMethods?: string | string[];
+  /** Comma-separated or array of allowed request headers. */
+  allowedHeaders?: string | string[];
+  /** Whether to allow credentials (cookies/authorization). Cannot be true when origin is '*'. */
+  allowCredentials?: boolean;
+  /** Max-age for preflight cache in seconds. Defaults to 86400 (24 hours). */
+  maxAge?: number;
 }
 
 export interface AuthSession {
@@ -175,14 +190,83 @@ async function safeJson<T = Record<string, unknown>>(request: Request): Promise<
   return (await request.json()) as T;
 }
 
-function json(status: number, body: unknown, extraHeaders?: Record<string, string>): Response {
+function json(status: number, body: unknown, extraHeaders?: Record<string, string>, responseCorsHeaders?: Record<string, string>): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: {
       ...JSON_HEADERS,
+      ...(responseCorsHeaders ?? {}),
       ...(extraHeaders ?? {}),
     },
   });
+}
+
+function normalizeStringList(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(String);
+  return value.split(",").map((s) => s.trim());
+}
+
+function buildCorsHeaders(request: Request, options: NonNullable<AuthWebOptions["cors"]>): Record<string, string> | null {
+  const origin = request.headers.get("origin");
+  if (!origin) return null;
+
+  const allowedOrigins = normalizeStringList(options.allowedOrigins);
+  const isWildcard = allowedOrigins.includes("*");
+
+  if (!isWildcard && !allowedOrigins.includes(origin)) {
+    return null; // origin not allowed
+  }
+
+  const headers: Record<string, string> = {};
+
+  if (isWildcard) {
+    headers["access-control-allow-origin"] = "*";
+  } else {
+    headers["access-control-allow-origin"] = origin;
+  }
+
+  if (options.allowCredentials && !isWildcard) {
+    headers["access-control-allow-credentials"] = "true";
+  }
+
+  if (options.allowedMethods?.length) {
+    const methods = normalizeStringList(options.allowedMethods);
+    headers["access-control-allow-methods"] = methods.join(", ");
+  }
+
+  if (options.allowedHeaders?.length) {
+    const reqHeaders = request.headers.get("access-control-request-headers");
+    if (reqHeaders) {
+      headers["access-control-allow-headers"] = reqHeaders;
+    }
+  }
+
+  if (options.maxAge !== undefined) {
+    headers["access-control-max-age"] = String(options.maxAge);
+  } else {
+    headers["access-control-max-age"] = "86400";
+  }
+
+  return headers;
+}
+
+function buildSimpleCorsHeaders(options: NonNullable<AuthWebOptions["cors"]>, origin: string | null): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const allowedOrigins = normalizeStringList(options.allowedOrigins);
+  const isWildcard = allowedOrigins.includes("*");
+
+  if (isWildcard) {
+    headers["access-control-allow-origin"] = "*";
+  } else if (origin && allowedOrigins.includes(origin)) {
+    headers["access-control-allow-origin"] = origin;
+  }
+
+  if (options.allowCredentials && !isWildcard) {
+    headers["access-control-allow-credentials"] = "true";
+  }
+
+  return headers;
 }
 
 function toPublicUser(user: AuthUser): Omit<AuthUser, "passwordHash"> {
@@ -277,14 +361,36 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
   }
 
   async function route(request: Request): Promise<Response> {
-    try {
-      const url = new URL(request.url);
-      if (!url.pathname.startsWith(basePath)) {
-        return json(404, { error: "Not found" });
-      }
+    const url = new URL(request.url);
+    if (!url.pathname.startsWith(basePath)) {
+      return json(404, { error: "Not found" });
+    }
 
-      const method = request.method.toUpperCase();
-      const subPath = (url.pathname.slice(basePath.length) || "/").replace(/\/+$/, "") || "/";
+    const method = request.method.toUpperCase();
+    const subPath = (url.pathname.slice(basePath.length) || "/").replace(/\/+$/, "") || "/";
+
+    // CORS preflight (must be before try so CORS errors don't leak into catch scope)
+    if (options.cors && method === "OPTIONS") {
+      const preflightCorsHeaders = buildCorsHeaders(request, options.cors);
+      if (preflightCorsHeaders) {
+        return new Response(null, { status: 204, headers: preflightCorsHeaders });
+      }
+      const corsOrigin2 = request.headers.get("origin");
+      const deniedCorsHeaders = corsOrigin2 ? buildSimpleCorsHeaders(options.cors, corsOrigin2) : {};
+      return json(403, { error: "CORS not allowed" }, undefined, deniedCorsHeaders);
+    }
+
+    // Attach CORS headers to all responses when configured
+    const corsOrigin = options.cors ? request.headers.get("origin") : null;
+    const responseCorsHeaders =
+      corsOrigin
+        ? buildSimpleCorsHeaders(options.cors, corsOrigin)
+        : {};
+
+    try {
+      if (!url.pathname.startsWith(basePath)) {
+        return json(404, { error: "Not found" }, responseCorsHeaders);
+      }
 
       if (method === "POST" && subPath === "/signup") {
         const limited = await checkRateLimit(request);
@@ -307,7 +413,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         if (limited) return limited;
         const body = await safeJson<LoginInput>(request);
         const user = await options.authService.login(body);
-        if (!user) return json(401, { error: "Invalid credentials" });
+        if (!user) return json(401, { error: "Invalid credentials" }, responseCorsHeaders);
 
         const publicUser = toPublicUser(user);
         const session = newSession(publicUser);
@@ -330,21 +436,21 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
 
       if (method === "GET" && subPath === "/session") {
         const session = getSessionFromRequest(request);
-        if (!session) return json(401, { error: "Unauthorized" });
-        return json(200, { session });
+        if (!session) return json(401, { error: "Unauthorized" }, responseCorsHeaders);
+        return json(200, { session }, responseCorsHeaders);
       }
 
       if (method === "GET" && subPath === "/me") {
         const session = getSessionFromRequest(request);
-        if (!session) return json(401, { error: "Unauthorized" });
+        if (!session) return json(401, { error: "Unauthorized" }, responseCorsHeaders);
 
-        if (!options.getUser) return json(501, { error: "getUser is not configured" });
+        if (!options.getUser) return json(501, { error: "getUser is not configured" }, responseCorsHeaders);
 
         const user = await options.getUser(session.userId);
-        if (!user) return json(401, { error: "User not found" });
+        if (!user) return json(401, { error: "User not found" }, responseCorsHeaders);
 
         const publicUser = toPublicUser(user);
-        return json(200, { user: publicUser });
+        return json(200, { user: publicUser }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/magic-link/request") {
@@ -356,7 +462,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           ttlSeconds: body.ttlSeconds,
         });
 
-        return json(200, { token });
+        return json(200, { token }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/magic-link/verify") {
@@ -364,7 +470,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         if (limited) return limited;
         const body = await safeJson<{ token: string }>(request);
         const user = await options.authService.verifyMagicLinkToken(body.token);
-        if (!user) return json(401, { error: "Invalid or expired token" });
+        if (!user) return json(401, { error: "Invalid or expired token" }, responseCorsHeaders);
 
         const publicUser = toPublicUser(user);
         const session = newSession(publicUser);
@@ -386,7 +492,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           ttlSeconds: body.ttlSeconds,
         });
 
-        return json(200, { token });
+        return json(200, { token }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/password-reset/reset") {
@@ -398,8 +504,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           newPassword: body.newPassword,
         });
 
-        if (!ok) return json(401, { error: "Invalid or expired token" });
-        return json(200, { ok: true });
+        if (!ok) return json(401, { error: "Invalid or expired token" }, responseCorsHeaders);
+        return json(200, { ok: true }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/email-verification/request") {
@@ -411,7 +517,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           ttlSeconds: body.ttlSeconds,
         });
 
-        return json(200, { token });
+        return json(200, { token }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/email-verification/verify") {
@@ -419,17 +525,17 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         if (limited) return limited;
         const body = await safeJson<{ token: string }>(request);
         const user = await options.authService.verifyEmailVerificationToken(body.token);
-        if (!user) return json(401, { error: "Invalid or expired token" });
+        if (!user) return json(401, { error: "Invalid or expired token" }, responseCorsHeaders);
 
         const publicUser = toPublicUser(user);
-        return json(200, { user: publicUser });
+        return json(200, { user: publicUser }, responseCorsHeaders);
       }
 
       if (method === "GET" && subPath.startsWith("/oauth/") && subPath.endsWith("/authorize")) {
         const provider = subPath.split("/")[2] as OAuthProvider;
 
         if (!options.getOAuthAuthorizeUrl) {
-          return json(501, { error: "OAuth authorize flow is not configured" });
+          return json(501, { error: "OAuth authorize flow is not configured" }, responseCorsHeaders);
         }
 
         const state = generateOAuthState();
@@ -451,6 +557,7 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           headers: {
             location,
             "set-cookie": stateCookie,
+            ...(Object.fromEntries(Object.entries(responseCorsHeaders).map(([k, v]) => [k, v]))),
           },
         });
       }
@@ -459,21 +566,21 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const provider = subPath.split("/")[2] as OAuthProvider;
 
         if (!options.completeOAuthCallback) {
-          return json(501, { error: "OAuth callback flow is not configured" });
+          return json(501, { error: "OAuth callback flow is not configured" }, responseCorsHeaders);
         }
 
         const callbackUrl = new URL(request.url);
         const code = callbackUrl.searchParams.get("code")?.trim();
         const receivedState = callbackUrl.searchParams.get("state")?.trim();
         if (!code || !receivedState) {
-          return json(400, { error: "Missing OAuth callback code or state" });
+          return json(400, { error: "Missing OAuth callback code or state" }, responseCorsHeaders);
         }
 
         const cookies = parseCookies(request);
         const expectedStateRaw = cookies[oauthStateCookieName(provider)];
         const expectedState = expectedStateRaw ? decodeOAuthState(expectedStateRaw) : null;
         if (!expectedState || expectedState !== receivedState) {
-          return json(400, { error: "Invalid OAuth state" });
+          return json(400, { error: "Invalid OAuth state" }, responseCorsHeaders);
         }
 
         const redirectUri = resolveOAuthRedirectUri(request, provider, basePath);
@@ -505,15 +612,18 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         return json(
           200,
           { user: publicUser },
-          appendSetCookie(
-            {
-              "set-cookie": serializeCookie(cookieName, sessionCookieValue(session), {
-                maxAge: sessionTtlSeconds,
-                secure: secureCookie,
-              }),
-            },
-            clearStateCookie,
-          ),
+          {
+            ...appendSetCookie(
+              {
+                "set-cookie": serializeCookie(cookieName, sessionCookieValue(session), {
+                  maxAge: sessionTtlSeconds,
+                  secure: secureCookie,
+                }),
+              },
+              clearStateCookie,
+            ),
+            ...responseCorsHeaders,
+          },
         );
       }
 
@@ -554,13 +664,13 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
           providerEmail: body.providerEmail,
         });
 
-        return json(200, { account: linked });
+        return json(200, { account: linked }, responseCorsHeaders);
       }
 
       if (method === "GET" && subPath === "/linked-accounts") {
         const current = await authenticateFromSession(request);
         const linked = await options.authService.getLinkedAccounts(current.userId);
-        return json(200, { accounts: linked });
+        return json(200, { accounts: linked }, responseCorsHeaders);
       }
 
       if (method === "PUT" && subPath === "/roles") {
@@ -569,18 +679,18 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const targetUserId = body.userId ?? current.userId;
 
         if (targetUserId !== current.userId && !current.roles.includes("support.write") && !current.roles.includes("billing.write")) {
-          return json(403, { error: "Forbidden" });
+          return json(403, { error: "Forbidden" }, responseCorsHeaders);
         }
 
         const roles = await options.authService.setUserRoles(targetUserId, body.roles ?? []);
-        return json(200, { userId: targetUserId, roles });
+        return json(200, { userId: targetUserId, roles }, responseCorsHeaders);
       }
 
-      return json(404, { error: "Not found" });
+      return json(404, { error: "Not found" }, responseCorsHeaders);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Internal error";
       const status = message === "Unauthorized" ? 401 : 400;
-      return json(status, { error: message });
+      return json(status, { error: message }, responseCorsHeaders);
     }
   }
 
