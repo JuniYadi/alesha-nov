@@ -84,3 +84,39 @@ export function createSmtpProvider(options: SmtpProviderOptions): EmailProvider 
     },
   };
 }
+
+export function generateOtp(length = 6): string {
+  const digits = "0123456789";
+  let otp = "";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  for (let i = 0; i < length; i++) {
+    otp += digits[bytes[i] % 10];
+  }
+  return otp;
+}
+
+export function generateVerificationToken(length = 32): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  let token = "";
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  for (let i = 0; i < length; i++) {
+    token += chars[bytes[i] % chars.length];
+  }
+  return token;
+}
+
+export interface TokenWithMetadata {
+  token: string;
+  expiresAt: string;
+  ttlSeconds: number;
+}
+
+export function createTokenWithMetadata(token: string, ttlSeconds: number): TokenWithMetadata {
+  return {
+    token,
+    ttlSeconds,
+    expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+  };
+}
