@@ -214,8 +214,16 @@ jobs:
             targets+=("packages/auth-react/src")
           fi
 
+          extra_args=()
+          if [[ "${{ needs.lint.outputs.auth_react }}" == "true" ]]; then
+            # Root-level bun test with path targets does not automatically apply package-local bunfig preload.
+            # Ensure JSDOM globals are available for auth-react tests.
+            extra_args+=("--preload" "./packages/auth-react/src/test-setup.ts")
+          fi
+
           echo "Coverage targets: ${targets[*]}"
-          bun test --coverage --coverage-reporter=lcov "${targets[@]}"
+          echo "Extra args: ${extra_args[*]}"
+          bun test --coverage --coverage-reporter=lcov "${extra_args[@]}" "${targets[@]}"
 
       - name: Upload coverage to Codecov
         if: needs.lint.outputs.any_changed == 'true' && hashFiles('coverage/lcov.info') != ''
