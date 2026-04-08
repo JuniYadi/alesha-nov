@@ -17,18 +17,18 @@ Provider-agnostic email delivery package (AWS SES + SMTP).
 
 ## Missing / On-going (Track Here)
 
-- [ ] Email template system (magic-link, verify email, reset password)
-- [ ] Retry + backoff wrapper for transient failures
-- [ ] Delivery status tracking callbacks/webhooks
-- [ ] Rate limiting wrapper for provider throttling
-- [ ] OTP/verification token helper utilities
-- [ ] Stronger SMTP integration tests (send path + failure path)
+- [ ] Email template system (magic-link, verify email, reset password) — [#28](https://github.com/JuniYadi/alesha-nov/issues/28)
+- [ ] Retry + backoff wrapper for transient failures — [#29](https://github.com/JuniYadi/alesha-nov/issues/29)
+- [ ] Delivery status tracking callbacks/webhooks — [#30](https://github.com/JuniYadi/alesha-nov/issues/30)
+- [ ] Rate limiting wrapper for provider throttling — [#31](https://github.com/JuniYadi/alesha-nov/issues/31)
+- [ ] OTP/verification token helper utilities — [#32](https://github.com/JuniYadi/alesha-nov/issues/32)
+- [ ] Stronger SMTP integration tests (send path + failure path) — [#33](https://github.com/JuniYadi/alesha-nov/issues/33)
 
-## Suggested GitHub Issues
+## Tracking Issues
 
-1. Add auth-focused template renderer + typed template payloads
-2. Add retry/backoff email provider decorator
-3. Add delivery status and bounce/complaint mapping API
-4. Add provider rate limiter wrapper
-5. Add OTP/verification helper module
-6. Upgrade SMTP tests to integration-style send assertions
+- [#28](https://github.com/JuniYadi/alesha-nov/issues/28) Add auth-focused template renderer and typed payloads (@alesha-nov/email)
+- [#29](https://github.com/JuniYadi/alesha-nov/issues/29) Add retry/backoff email provider decorator (@alesha-nov/email)
+- [#30](https://github.com/JuniYadi/alesha-nov/issues/30) Add delivery status tracking API for bounces/complaints (@alesha-nov/email)
+- [#31](https://github.com/JuniYadi/alesha-nov/issues/31) Add provider rate-limiting wrapper (@alesha-nov/email)
+- [#32](https://github.com/JuniYadi/alesha-nov/issues/32) Add OTP/verification token helper utilities (@alesha-nov/email)
+- [#33](https://github.com/JuniYadi/alesha-nov/issues/33) Strengthen SMTP integration tests for send/failure paths (@alesha-nov/email)

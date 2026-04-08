@@ -21,19 +21,21 @@ Core auth service for signup/login, magic link, and OAuth account login/linking.
 
 ## Missing / On-going (Track Here)
 
-- [ ] Forgot password + reset password flow
-- [ ] Session/JWT issuance + refresh strategy contract
-- [ ] Brute-force/rate-limit/lockout protections
-- [ ] Password strength policy enforcement
-- [ ] OAuth PKCE/authorize-callback flow abstraction
-- [ ] Audit events/hooks (`LOGIN`, `LOGIN_FAIL`, `SIGNUP`, etc.)
-- [ ] Node compatibility for UUID generation (replace Bun-only `randomUUIDv7`)
+- [ ] Session/JWT issuance + refresh strategy contract — [#23](https://github.com/JuniYadi/alesha-nov/issues/23)
+- [ ] Brute-force/rate-limit/lockout protections — [#24](https://github.com/JuniYadi/alesha-nov/issues/24)
+- [ ] Password strength policy enforcement — [#25](https://github.com/JuniYadi/alesha-nov/issues/25)
+- [ ] OAuth PKCE/authorize-callback flow abstraction — [#27](https://github.com/JuniYadi/alesha-nov/issues/27)
+- [ ] Audit events/hooks (`LOGIN`, `LOGIN_FAIL`, `SIGNUP`, etc.) — [#26](https://github.com/JuniYadi/alesha-nov/issues/26)
 
-## Suggested GitHub Issues
+## Already Implemented (was previously tracked as missing)
 
-1. Add forgot/reset password flow + migrations
-2. Add structured session/JWT contract for auth-web integration
-3. Add login/signup/magic-link rate limiting and lockout
-4. Add password policy validator + tests
-5. Add auth event/audit hook interface
-6. Replace Bun-only UUID API with Node-compatible strategy
+- [x] Forgot password + reset password flow
+- [x] Node compatibility for UUID generation (Bun v7 with Node fallback)
+
+## Tracking Issues
+
+- [#23](https://github.com/JuniYadi/alesha-nov/issues/23) Implement session/JWT issuance + refresh strategy contract (@alesha-nov/auth)
+- [#24](https://github.com/JuniYadi/alesha-nov/issues/24) Add brute-force protection and rate-limit/lockout (@alesha-nov/auth)
+- [#25](https://github.com/JuniYadi/alesha-nov/issues/25) Add password strength policy enforcement (@alesha-nov/auth)
+- [#26](https://github.com/JuniYadi/alesha-nov/issues/26) Add auth audit events/hooks interface (@alesha-nov/auth)
+- [#27](https://github.com/JuniYadi/alesha-nov/issues/27) Add OAuth PKCE authorize/callback abstraction (@alesha-nov/auth)

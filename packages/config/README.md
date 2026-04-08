@@ -18,16 +18,17 @@ Database primitives for the monorepo: DB type resolution, SQL client creation, a
 
 ## Missing / On-going (Track Here)
 
-- [ ] Auth config types (`JWTConfig`, `SessionConfig`)
-- [ ] OAuth config resolver (Google/GitHub client/secret/redirect)
-- [ ] Magic-link/email config resolver (TTL, sender, transport)
-- [ ] Auth-specific migration bundle export (users, sessions, oauth, magic tokens)
-- [ ] Unit tests for auth config resolvers
+- [ ] Session config env resolver (`resolveSessionConfig`) — [#21](https://github.com/JuniYadi/alesha-nov/issues/21)
+- [ ] Magic-link/email config resolver (TTL, sender, transport) — [#22](https://github.com/JuniYadi/alesha-nov/issues/22)
 
-## Suggested GitHub Issues
+## Already Implemented (was previously tracked as missing)
 
-1. Add JWT/session config types and env resolvers
-2. Add OAuth provider config types + validation
-3. Add magic-link/email config types + defaults
-4. Add auth migration export set
-5. Add auth config test suite
+- [x] Auth config types (`JWTConfig`, `SessionConfig`)
+- [x] OAuth config resolver (Google/GitHub client/secret/redirect)
+- [x] Auth-specific migration bundle export (`authMigrationsBundle`)
+- [x] Unit tests for auth config resolvers
+
+## Tracking Issues
+
+- [#21](https://github.com/JuniYadi/alesha-nov/issues/21) Add session config env resolver (@alesha-nov/config)
+- [#22](https://github.com/JuniYadi/alesha-nov/issues/22) Add magic-link/email configuration resolver (@alesha-nov/config)
