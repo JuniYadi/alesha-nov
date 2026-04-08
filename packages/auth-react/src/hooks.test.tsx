@@ -1,13 +1,22 @@
 import { describe, expect, test, beforeEach, afterEach, vi, type Mock } from "bun:test";
-import { act, renderHook, cleanup } from "@testing-library/react";
-import { useLogin, useSignup, useLogout, usePasswordResetRequest, useResetPassword, useOAuthLogin } from "./hooks";
+import { act, renderHook, cleanup, waitFor } from "@testing-library/react";
+import {
+  useLogin,
+  useSignup,
+  useLogout,
+  usePasswordResetRequest,
+  useResetPassword,
+  useMagicLinkRequest,
+  useMagicLinkVerify,
+  useOAuthLogin,
+  useAuthGuard,
+} from "./hooks";
 import { useAuth } from "./context";
 import type { PublicUser, AuthContextValue } from "./types";
 
-// Mock the context
 vi.mock("./context", () => ({
   useAuth: vi.fn(),
-  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+  AuthProvider: ({ children }: { children: unknown }) => children,
 }));
 
 const mockUser: PublicUser = {
@@ -49,6 +58,18 @@ function setupFetch() {
       }
       if (url.includes("/password-reset/reset")) {
         return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/magic-link/request")) {
+        return new Response(JSON.stringify({ token: "magic-token" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/magic-link/verify")) {
+        return new Response(JSON.stringify({ user: mockUser }), {
           status: 200,
           headers: { "content-type": "application/json" },
         });
@@ -115,7 +136,9 @@ describe("useLogin", () => {
     await act(async () => {
       try {
         await result.current.login({ email: "bad@example.com", password: "wrong" });
-      } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
     });
 
     expect(result.current.error).toBe("Invalid credentials");
@@ -181,7 +204,9 @@ describe("useSignup", () => {
     await act(async () => {
       try {
         await result.current.signup({ email: "existing@example.com", password: "password123" });
-      } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
     });
 
     expect(result.current.error).toBe("Email already in use");
@@ -199,7 +224,7 @@ describe("useLogout", () => {
     (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
       status: "authenticated",
       user: mockUser,
-      session: { id: "s-1", userId: "u-1", expiresAt: "" },
+      session: { userId: "u-1", email: "user@example.com", roles: ["admin"], exp: 9999999999 },
       refetch: refetchMock,
     });
   });
@@ -243,7 +268,9 @@ describe("useLogout", () => {
     await act(async () => {
       try {
         await result.current.logout();
-      } catch { /* ignore */ }
+      } catch {
+        // ignore
+      }
     });
 
     expect(result.current.error).toBe("Logout failed");
@@ -359,6 +386,120 @@ describe("useResetPassword", () => {
   });
 });
 
+describe("useMagicLinkRequest", () => {
+  beforeEach(() => {
+    setupFetch();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("successful request sets sent=true and posts payload", async () => {
+    const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
+    const { result } = renderHook(() => useMagicLinkRequest({ basePath: "/auth" }));
+
+    await act(async () => {
+      await result.current.request({ email: "user@example.com", ttlSeconds: 120 });
+    });
+
+    expect(fetchSpy).toHaveBeenCalled();
+    expect(result.current.sent).toBe(true);
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("failed request sets error", async () => {
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST" && url.includes("/magic-link/request")) {
+        return new Response(JSON.stringify({ error: "User not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHook(() => useMagicLinkRequest());
+
+    await act(async () => {
+      try {
+        await result.current.request({ email: "missing@example.com" });
+      } catch {
+        // ignore
+      }
+    });
+
+    expect(result.current.sent).toBe(false);
+    expect(result.current.error).toBe("User not found");
+  });
+});
+
+describe("useMagicLinkVerify", () => {
+  const refetchMock = vi.fn().mockResolvedValue(undefined);
+
+  beforeEach(() => {
+    setupFetch();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: refetchMock,
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("successful verify sets data and calls refetch", async () => {
+    const { result } = renderHook(() => useMagicLinkVerify());
+
+    await act(async () => {
+      await result.current.verify({ token: "magic-token" });
+    });
+
+    expect(result.current.data).toEqual(mockUser);
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(false);
+    expect(refetchMock).toHaveBeenCalled();
+  });
+
+  test("failed verify sets error", async () => {
+    globalThis.fetch = vi.fn(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST" && url.includes("/magic-link/verify")) {
+        return new Response(JSON.stringify({ error: "Invalid or expired token" }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHook(() => useMagicLinkVerify());
+
+    await act(async () => {
+      try {
+        await result.current.verify({ token: "bad-token" });
+      } catch {
+        // ignore
+      }
+    });
+
+    expect(result.current.data).toBe(null);
+    expect(result.current.error).toBe("Invalid or expired token");
+    expect(refetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("useOAuthLogin", () => {
   beforeEach(() => {
     setupFetch();
@@ -389,5 +530,80 @@ describe("useOAuthLogin", () => {
     expect(result.current.loading).toBe(true);
 
     assignSpy.mockRestore();
+  });
+});
+
+describe("useAuthGuard", () => {
+  beforeEach(() => {
+    setupFetch();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
+
+  test("uses navigation adapter push for unauthenticated redirects", async () => {
+    const push = vi.fn();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderHook(() => useAuthGuard({ redirectTo: "/login", navigationAdapter: { push } }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  test("uses navigation adapter replace when requested", async () => {
+    const replace = vi.fn();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderHook(() => useAuthGuard({ redirectTo: "/login", navigationAdapter: { replace }, replace: true }));
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  test("falls back to window.location.assign when no adapter provided", async () => {
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
+
+    renderHook(() => useAuthGuard({ redirectTo: "/login" }));
+
+    await waitFor(() => {
+      expect(assignSpy).toHaveBeenCalledWith("/login");
+    });
+
+    assignSpy.mockRestore();
+  });
+
+  test("returns loading/authenticated flags from context status", () => {
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "authenticated",
+      user: mockUser,
+      session: { userId: "u-1", email: "user@example.com", roles: ["admin"], exp: 9999999999 },
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useAuthGuard({ redirectTo: "/login" }));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isAuthenticated).toBe(true);
   });
 });

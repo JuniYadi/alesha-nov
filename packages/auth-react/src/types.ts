@@ -44,4 +44,31 @@ export type OAuthProvider = "google" | "github";
 export interface AuthApiConfig {
   basePath?: string;
   baseUrl?: string;
+  sessionRefreshBufferSeconds?: number;
 }
+
+export interface AuthGuardNavigationAdapter {
+  push?: (to: string) => void;
+  replace?: (to: string) => void;
+}
+
+export interface MagicLinkRequestInput {
+  email: string;
+  ttlSeconds?: number;
+}
+
+export interface MagicLinkVerifyInput {
+  token: string;
+}
+
+export interface UseAuthGuardOptions {
+  redirectTo?: string;
+  navigationAdapter?: AuthGuardNavigationAdapter;
+  replace?: boolean;
+}
+
+export type OAuthOrMagicProvider = OAuthProvider | "magic-link";
+
+export type AuthRevalidationStatus = "idle" | "scheduled";
+
+export const DEFAULT_SESSION_REFRESH_BUFFER_SECONDS = 30;

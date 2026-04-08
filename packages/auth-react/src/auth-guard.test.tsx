@@ -4,7 +4,7 @@ import { AuthGuard } from "./auth-guard";
 import { AuthProvider } from "./context";
 import type { ReactNode } from "react";
 
-const mockSession = { userId: "u-1", email: "x", roles: [], exp: 0 };
+const mockSession = { userId: "u-1", email: "x", roles: [], exp: Math.floor(Date.now() / 1000) + 3600 };
 const mockUser = { id: "u-1", email: "x", name: null, image: null, emailVerifiedAt: null, createdAt: "", roles: [] };
 
 let fetchMock: ReturnType<typeof vi.fn>;
