@@ -66,6 +66,11 @@ export interface AuthUser {
   createdAt: string;
 }
 
+export interface EmailVerificationInput {
+  email: string;
+  ttlSeconds?: number;
+}
+
 export interface AuthService {
   signup(input: SignupInput): Promise<AuthUser>;
   login(input: LoginInput): Promise<AuthUser | null>;
@@ -73,6 +78,8 @@ export interface AuthService {
   verifyMagicLinkToken(token: string): Promise<AuthUser | null>;
   issuePasswordResetToken(input: PasswordResetInput): Promise<string>;
   resetPassword(input: ResetPasswordInput): Promise<boolean>;
+  issueEmailVerificationToken(input: EmailVerificationInput): Promise<string>;
+  verifyEmailVerificationToken(token: string): Promise<AuthUser | null>;
   setUserRoles(userId: string, roles: string[]): Promise<string[]>;
   getUserRoles(userId: string): Promise<string[]>;
   loginWithOAuth(input: OAuthLoginInput): Promise<AuthUser>;
