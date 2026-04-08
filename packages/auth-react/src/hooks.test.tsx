@@ -146,6 +146,32 @@ describe("useLogin", () => {
     expect(result.current.loading).toBe(false);
     expect(refetchMock).not.toHaveBeenCalled();
   });
+
+  test("failed login with non-json error uses statusText fallback", async () => {
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (options?.method === "POST" && url.includes("/login")) {
+        return new Response("internal error", {
+          status: 500,
+          statusText: "Server Error",
+          headers: { "content-type": "text/plain" },
+        });
+      }
+      return new Response("", { status: 404 });
+    });
+
+    const { result } = renderHook(() => useLogin());
+
+    await act(async () => {
+      try {
+        await result.current.login({ email: "user@example.com", password: "bad-pass" });
+      } catch {
+        // ignore
+      }
+    });
+
+    expect(result.current.error).toBe("Server Error");
+    expect(result.current.loading).toBe(false);
+  });
 });
 
 describe("useSignup", () => {
@@ -531,6 +557,27 @@ describe("useOAuthLogin", () => {
 
     assignSpy.mockRestore();
   });
+
+  test("handles assign errors and resets loading", () => {
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => {
+      throw new Error("redirect failed");
+    });
+
+    const { result } = renderHook(() => useOAuthLogin({ basePath: "/auth" }));
+
+    act(() => {
+      try {
+        result.current.login("github");
+      } catch {
+        // expected
+      }
+    });
+
+    expect(result.current.loading).toBe(false);
+
+    assignSpy.mockRestore();
+  });
+
 });
 
 describe("useAuthGuard", () => {
@@ -591,6 +638,57 @@ describe("useAuthGuard", () => {
       expect(assignSpy).toHaveBeenCalledWith("/login");
     });
 
+    assignSpy.mockRestore();
+  });
+
+  test("uses adapter replace as fallback when push is missing", async () => {
+    const replace = vi.fn();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderHook(() => useAuthGuard({ redirectTo: "/login", navigationAdapter: { replace } }));
+
+    await waitFor(() => {
+      expect(replace).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  test("prefers adapter push when replace flag is true but replace fn is missing", async () => {
+    const push = vi.fn();
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    renderHook(() => useAuthGuard({ redirectTo: "/login", navigationAdapter: { push }, replace: true }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith("/login");
+    });
+  });
+
+  test("uses custom baseUrl for oauth redirect", () => {
+    const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
+    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+      status: "unauthenticated",
+      user: null,
+      session: null,
+      refetch: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { result } = renderHook(() => useOAuthLogin({ baseUrl: "https://api.example.com/", basePath: "/auth" }));
+
+    act(() => {
+      result.current.login("github");
+    });
+
+    expect(assignSpy).toHaveBeenCalledWith("https://api.example.com/auth/oauth/github/authorize");
     assignSpy.mockRestore();
   });
 

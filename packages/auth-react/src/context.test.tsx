@@ -194,6 +194,47 @@ describe("AuthProvider", () => {
     expect(requestedUrls.some((u) => u.includes("https://example.com/api/auth/me"))).toBe(true);
   });
 
+  test("schedules immediate refetch when session is already within refresh buffer", async () => {
+    const nearExpirySession: AuthSession = {
+      ...mockSession,
+      exp: Math.floor(Date.now() / 1000) + 1,
+    };
+
+    let sessionCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/session")) {
+        sessionCalls += 1;
+        return Promise.resolve(
+          new Response(JSON.stringify({ session: nearExpirySession }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        );
+      }
+      if (url.includes("/me")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ user: mockUser }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        );
+      }
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    });
+
+    render(
+      <AuthProvider config={{ sessionRefreshBufferSeconds: 30 }}>
+        <DummyChild />
+      </AuthProvider>
+    );
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+
+    expect(sessionCalls).toBeGreaterThan(1);
+  });
+
   test("useAuth throws when used outside provider", () => {
     // Suppress console.error for this test
     const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
