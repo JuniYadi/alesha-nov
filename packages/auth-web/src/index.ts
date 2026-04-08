@@ -18,6 +18,15 @@ export interface OAuthCallbackProfile {
   roles?: string[];
 }
 
+export interface RateLimiter {
+  consume(key: string): Promise<{ success: boolean; limit: number; remaining: number; reset: number }>;
+}
+
+export interface RateLimitOptions {
+  windowSeconds: number;
+  maxRequests: number;
+}
+
 export interface AuthWebOptions {
   authService: AuthService;
   sessionSecret: string;
@@ -25,6 +34,10 @@ export interface AuthWebOptions {
   cookieName?: string;
   sessionTtlSeconds?: number;
   secureCookie?: boolean;
+  /* Optional: rate limiting configuration or custom limiter. */
+  rateLimit?: RateLimitOptions | RateLimiter;
+  /* Optional: identify client for rate limiting (e.g., return IP). */
+  getRateLimitKey?: (request: Request) => string | Promise<string>;
   /* Optional: resolve a user by ID for GET /me. */
   getUser?: (userId: string) => Promise<AuthUser | null>;
   /* Optional: build provider authorize URL for GET /oauth/:provider/authorize. */
@@ -178,6 +191,28 @@ function toPublicUser(user: AuthUser): Omit<AuthUser, "passwordHash"> {
   return rest;
 }
 
+class MemoryRateLimiter implements RateLimiter {
+  private bucket: Map<string, { count: number; reset: number }> = new Map();
+
+  constructor(private options: RateLimitOptions) {}
+
+  async consume(key: string) {
+    const now = Math.floor(Date.now() / 1000);
+    const item = this.bucket.get(key);
+
+    if (!item || item.reset <= now) {
+      const reset = now + this.options.windowSeconds;
+      this.bucket.set(key, { count: 1, reset });
+      return { success: true, limit: this.options.maxRequests, remaining: this.options.maxRequests - 1, reset };
+    }
+
+    item.count++;
+    const success = item.count <= this.options.maxRequests;
+    const remaining = Math.max(0, this.options.maxRequests - item.count);
+    return { success, limit: this.options.maxRequests, remaining, reset: item.reset };
+  }
+}
+
 export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
   const basePath = normalizeBasePath(options.basePath);
   const cookieName = options.cookieName ?? "alesha_auth";
@@ -186,6 +221,31 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
 
   if (!options.sessionSecret || options.sessionSecret.length < 16) {
     throw new Error("sessionSecret is required and should be at least 16 chars");
+  }
+
+  const limiter: RateLimiter | null = options.rateLimit
+    ? "consume" in options.rateLimit
+      ? options.rateLimit
+      : new MemoryRateLimiter(options.rateLimit)
+    : null;
+
+  async function checkRateLimit(request: Request) {
+    if (!limiter) return null;
+    const key = options.getRateLimitKey ? await options.getRateLimitKey(request) : "global";
+    const result = await limiter.consume(key);
+    if (!result.success) {
+      return json(
+        429,
+        { error: "Too many requests" },
+        {
+          "x-ratelimit-limit": String(result.limit),
+          "x-ratelimit-remaining": String(result.remaining),
+          "x-ratelimit-reset": String(result.reset),
+          "retry-after": String(Math.max(0, result.reset - Math.floor(Date.now() / 1000))),
+        }
+      );
+    }
+    return null;
   }
 
   function newSession(user: Omit<AuthUser, "passwordHash">): AuthSession {
@@ -227,6 +287,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       const subPath = (url.pathname.slice(basePath.length) || "/").replace(/\/+$/, "") || "/";
 
       if (method === "POST" && subPath === "/signup") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<SignupInput>(request);
         const user = await options.authService.signup(body);
         const publicUser = toPublicUser(user);
@@ -241,6 +303,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/login") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<LoginInput>(request);
         const user = await options.authService.login(body);
         if (!user) return json(401, { error: "Invalid credentials" });
@@ -284,6 +348,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/magic-link/request") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
         const token = await options.authService.issueMagicLinkToken({
           email: body.email,
@@ -294,6 +360,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/magic-link/verify") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<{ token: string }>(request);
         const user = await options.authService.verifyMagicLinkToken(body.token);
         if (!user) return json(401, { error: "Invalid or expired token" });
@@ -310,6 +378,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/password-reset/request") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
         const token = await options.authService.issuePasswordResetToken({
           email: body.email,
@@ -320,6 +390,8 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
       }
 
       if (method === "POST" && subPath === "/password-reset/reset") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
         const body = await safeJson<{ token: string; newPassword: string }>(request);
         const ok = await options.authService.resetPassword({
           token: body.token,

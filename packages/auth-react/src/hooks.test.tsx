@@ -81,6 +81,12 @@ function setupFetch() {
   return fetchMock;
 }
 
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
+});
+
 describe("useLogin", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   const refetchMock = vi.fn().mockResolvedValue(undefined);
