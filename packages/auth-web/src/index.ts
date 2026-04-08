@@ -386,6 +386,15 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
     return session;
   }
 
+  type ExtendedAuthService = AuthService & {
+    issuePasswordResetToken?: (input: { email: string; ttlSeconds?: number }) => Promise<string>;
+    resetPassword?: (input: { token: string; newPassword: string }) => Promise<boolean>;
+    issueEmailVerificationToken?: (input: { email: string; ttlSeconds?: number }) => Promise<string>;
+    verifyEmailVerificationToken?: (token: string) => Promise<AuthUser | null>;
+  };
+
+  const extendedAuthService = options.authService as ExtendedAuthService;
+
   async function route(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (!url.pathname.startsWith(basePath)) {
@@ -407,10 +416,11 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
     }
 
     // Attach CORS headers to all responses when configured
-    const corsOrigin = options.cors ? request.headers.get("origin") : null;
+    const corsOptions = options.cors;
+    const corsOrigin = corsOptions ? request.headers.get("origin") : null;
     const responseCorsHeaders =
-      corsOrigin
-        ? buildSimpleCorsHeaders(options.cors, corsOrigin)
+      corsOptions && corsOrigin
+        ? buildSimpleCorsHeaders(corsOptions, corsOrigin)
         : {};
 
     try {
@@ -539,7 +549,11 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
         const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
-        const token = await options.authService.issuePasswordResetToken({
+        if (!extendedAuthService.issuePasswordResetToken) {
+          return json(501, { error: "Password reset flow is not configured" }, responseCorsHeaders);
+        }
+
+        const token = await extendedAuthService.issuePasswordResetToken({
           email: body.email,
           ttlSeconds: body.ttlSeconds,
         });
@@ -551,7 +565,11 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
         const body = await safeJson<{ token: string; newPassword: string }>(request);
-        const ok = await options.authService.resetPassword({
+        if (!extendedAuthService.resetPassword) {
+          return json(501, { error: "Password reset flow is not configured" }, responseCorsHeaders);
+        }
+
+        const ok = await extendedAuthService.resetPassword({
           token: body.token,
           newPassword: body.newPassword,
         });
@@ -564,7 +582,11 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
         const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
-        const token = await options.authService.issueEmailVerificationToken({
+        if (!extendedAuthService.issueEmailVerificationToken) {
+          return json(501, { error: "Email verification flow is not configured" }, responseCorsHeaders);
+        }
+
+        const token = await extendedAuthService.issueEmailVerificationToken({
           email: body.email,
           ttlSeconds: body.ttlSeconds,
         });
@@ -576,7 +598,11 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
         const body = await safeJson<{ token: string }>(request);
-        const user = await options.authService.verifyEmailVerificationToken(body.token);
+        if (!extendedAuthService.verifyEmailVerificationToken) {
+          return json(501, { error: "Email verification flow is not configured" }, responseCorsHeaders);
+        }
+
+        const user = await extendedAuthService.verifyEmailVerificationToken(body.token);
         if (!user) return json(401, { error: "Invalid or expired token" }, responseCorsHeaders);
 
         const publicUser = toPublicUser(user);
