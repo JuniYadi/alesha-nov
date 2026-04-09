@@ -85,6 +85,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
+  vi.restoreAllMocks();
 });
 
 describe("useLogin", () => {
