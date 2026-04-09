@@ -297,7 +297,10 @@ describe("auth migrations bundle", () => {
     const sql = authMigrationsBundle.map((m) => m.sql).join("\n");
     expect(sql.includes("auth_users")).toBe(true);
     expect(sql.includes("auth_sessions")).toBe(true);
-    expect(sql.includes("auth_oauth_accounts")).toBe(true);
     expect(sql.includes("auth_magic_link_tokens")).toBe(true);
+    expect(sql.includes("auth_user_roles")).toBe(true);
+    expect(sql.includes("auth_oauth_accounts")).toBe(true);
+    expect(sql.includes("auth_password_reset_tokens")).toBe(true);
+    expect(sql.includes("auth_email_verification_tokens")).toBe(true);
   });
 });

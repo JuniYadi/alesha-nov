@@ -25,7 +25,7 @@ Database primitives for the monorepo: DB type resolution, SQL client creation, a
 
 - [x] Auth config types (`JWTConfig`, `SessionConfig`)
 - [x] OAuth config resolver (Google/GitHub client/secret/redirect)
-- [x] Auth-specific migration bundle export (`authMigrationsBundle`)
+- [x] Canonical auth migration bundle export (`authMigrationsBundle`) consumed by `@alesha-nov/auth`
 - [x] Unit tests for auth config resolvers
 
 ## Tracking Issues
