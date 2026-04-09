@@ -128,6 +128,78 @@ export interface RetryOptions {
   shouldRetry?: (error: unknown) => boolean;
 }
 
+// ── Template renderer ──────────────────────────────────────────────────────
+
+export interface TemplateRenderer {
+  render(template: string, data: Record<string, string>): string;
+}
+
+export interface MagicLinkPayload {
+  email: string;
+  link: string;
+  expiresInMinutes: number;
+}
+
+export interface VerifyEmailPayload {
+  email: string;
+  code: string;
+  expiresInMinutes: number;
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  code: string;
+  expiresInMinutes: number;
+}
+
+export const templateRenderer: TemplateRenderer = {
+  render(template, data) {
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => data[key] ?? `{{${key}}}`);
+  },
+};
+
+export function renderMagicLinkEmail(data: MagicLinkPayload): { subject: string; html: string; text: string } {
+  return {
+    subject: "Your Magic Link",
+    html: templateRenderer.render(
+      "<p>Hi,</p><p>Click <a href=\"{{link}}\">here</a> to sign in. This link expires in {{expiresInMinutes}} minutes.</p>",
+      { link: data.link, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+    text: templateRenderer.render(
+      "Hi,\n\nVisit this link to sign in: {{link}}\nExpires in {{expiresInMinutes}} minutes.",
+      { link: data.link, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+  };
+}
+
+export function renderVerifyEmailEmail(data: VerifyEmailPayload): { subject: string; html: string; text: string } {
+  return {
+    subject: "Verify Your Email",
+    html: templateRenderer.render(
+      "<p>Hi,</p><p>Your verification code is: <strong>{{code}}</strong>. It expires in {{expiresInMinutes}} minutes.</p>",
+      { code: data.code, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+    text: templateRenderer.render(
+      "Hi,\n\nYour verification code: {{code}}\nExpires in {{expiresInMinutes}} minutes.",
+      { code: data.code, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+  };
+}
+
+export function renderResetPasswordEmail(data: ResetPasswordPayload): { subject: string; html: string; text: string } {
+  return {
+    subject: "Reset Your Password",
+    html: templateRenderer.render(
+      "<p>Hi,</p><p>Your password reset code is: <strong>{{code}}</strong>. It expires in {{expiresInMinutes}} minutes.</p>",
+      { code: data.code, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+    text: templateRenderer.render(
+      "Hi,\n\nPassword reset code: {{code}}\nExpires in {{expiresInMinutes}} minutes.",
+      { code: data.code, expiresInMinutes: String(data.expiresInMinutes) }
+    ),
+  };
+}
+
 export interface RateLimitOptions {
   burstLimit: number;       // max tokens in bucket (burst capacity)
   refillRatePerSecond: number; // sustained tokens per second
