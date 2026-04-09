@@ -29,6 +29,31 @@ export interface SessionConfig {
   sameSite: SessionSameSite;
 }
 
+export interface MagicLinkConfig {
+  ttlSeconds: number;
+  sender: string;
+}
+
+export type EmailTransportType = "ses" | "smtp";
+
+export interface EmailSESTransportConfig {
+  region: string;
+}
+
+export interface EmailSMTPTransportConfig {
+  host: string;
+  port: number;
+  secure: boolean;
+  username?: string;
+  password?: string;
+}
+
+export interface EmailTransportConfig {
+  type: EmailTransportType;
+  ses?: EmailSESTransportConfig;
+  smtp?: EmailSMTPTransportConfig;
+}
+
 export interface OAuthProviderConfig {
   clientId: string;
   clientSecret: string;
@@ -131,6 +156,114 @@ export function resolveSessionConfig(): SessionConfig {
     secure: secureRaw ? parseBoolean(secureRaw, "session secure") : false,
     sameSite: sameSiteRaw ? parseSessionSameSite(sameSiteRaw) : "lax",
   };
+}
+
+export function resolveMagicLinkConfig(): MagicLinkConfig {
+  const ttlRaw =
+    readEnv(["AUTH_MAGIC_LINK_TTL_SECONDS", "MAGIC_LINK_TTL_SECONDS"]) ??
+    "900";
+
+  const sender = readEnv([
+    "AUTH_MAGIC_LINK_SENDER",
+    "MAGIC_LINK_SENDER",
+    "AUTH_EMAIL_FROM",
+    "EMAIL_FROM",
+  ]);
+
+  if (!sender) {
+    throw new Error(
+      "Missing magic-link sender. Set AUTH_MAGIC_LINK_SENDER, MAGIC_LINK_SENDER, AUTH_EMAIL_FROM, or EMAIL_FROM."
+    );
+  }
+
+  if (!sender.includes("@")) {
+    throw new Error("Invalid magic-link sender. Must be a valid email address.");
+  }
+
+  return {
+    ttlSeconds: parsePositiveInteger(ttlRaw, "magic-link ttlSeconds"),
+    sender,
+  };
+}
+
+function resolveSESTransportConfig(): EmailTransportConfig {
+  const region = readEnv(["AUTH_EMAIL_SES_REGION", "EMAIL_SES_REGION"]);
+
+  if (!region) {
+    throw new Error("Missing SES region. Set AUTH_EMAIL_SES_REGION or EMAIL_SES_REGION.");
+  }
+
+  return {
+    type: "ses",
+    ses: { region },
+  };
+}
+
+function resolveSMTPTransportConfig(): EmailTransportConfig {
+  const host = readEnv(["AUTH_EMAIL_SMTP_HOST", "EMAIL_SMTP_HOST"]);
+
+  if (!host) {
+    throw new Error("Missing SMTP host. Set AUTH_EMAIL_SMTP_HOST or EMAIL_SMTP_HOST.");
+  }
+
+  const portRaw = readEnv(["AUTH_EMAIL_SMTP_PORT", "EMAIL_SMTP_PORT"]) ?? "587";
+  const secureRaw =
+    readEnv(["AUTH_EMAIL_SMTP_SECURE", "EMAIL_SMTP_SECURE"]) ?? "false";
+  const username = readEnv(["AUTH_EMAIL_SMTP_USERNAME", "EMAIL_SMTP_USERNAME"]);
+  const password = readEnv(["AUTH_EMAIL_SMTP_PASSWORD", "EMAIL_SMTP_PASSWORD"]);
+
+  const port = parsePositiveInteger(portRaw, "smtp port");
+  if (port > 65535) {
+    throw new Error("Invalid smtp port. Must be between 1 and 65535.");
+  }
+
+  return {
+    type: "smtp",
+    smtp: {
+      host,
+      port,
+      secure: parseBoolean(secureRaw, "smtp secure"),
+      username,
+      password,
+    },
+  };
+}
+
+export function resolveEmailTransportConfig(): EmailTransportConfig | undefined {
+  const typeInput = readEnv(["AUTH_EMAIL_TRANSPORT", "EMAIL_TRANSPORT"]);
+
+  if (!typeInput) {
+    const hasSESConfig = Boolean(
+      readEnv(["AUTH_EMAIL_SES_REGION", "EMAIL_SES_REGION"])
+    );
+    const hasSMTPConfig = Boolean(
+      readEnv(["AUTH_EMAIL_SMTP_HOST", "EMAIL_SMTP_HOST"])
+    );
+
+    if (!hasSESConfig && !hasSMTPConfig) {
+      return undefined;
+    }
+
+    if (hasSESConfig && hasSMTPConfig) {
+      throw new Error(
+        "Ambiguous email transport config. Set AUTH_EMAIL_TRANSPORT (ses|smtp)."
+      );
+    }
+
+    return hasSESConfig ? resolveSESTransportConfig() : resolveSMTPTransportConfig();
+  }
+
+  const type = typeInput.toLowerCase();
+
+  if (type === "ses") {
+    return resolveSESTransportConfig();
+  }
+
+  if (type === "smtp") {
+    return resolveSMTPTransportConfig();
+  }
+
+  throw new Error("Invalid email transport. Supported values: ses | smtp");
 }
 
 function resolveOAuthProviderConfig(provider: "google" | "github"): OAuthProviderConfig | undefined {

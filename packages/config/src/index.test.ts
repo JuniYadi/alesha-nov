@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   authMigrationsBundle,
   resolveDBType,
+  resolveEmailTransportConfig,
   resolveJWTSecret,
+  resolveMagicLinkConfig,
   resolveOAuthConfig,
   resolveSessionConfig,
 } from "./index";
@@ -24,6 +26,26 @@ const ENV_KEYS = [
   "SESSION_SECURE",
   "AUTH_SESSION_SAME_SITE",
   "SESSION_SAME_SITE",
+  "AUTH_MAGIC_LINK_TTL_SECONDS",
+  "MAGIC_LINK_TTL_SECONDS",
+  "AUTH_MAGIC_LINK_SENDER",
+  "MAGIC_LINK_SENDER",
+  "AUTH_EMAIL_FROM",
+  "EMAIL_FROM",
+  "AUTH_EMAIL_TRANSPORT",
+  "EMAIL_TRANSPORT",
+  "AUTH_EMAIL_SES_REGION",
+  "EMAIL_SES_REGION",
+  "AUTH_EMAIL_SMTP_HOST",
+  "EMAIL_SMTP_HOST",
+  "AUTH_EMAIL_SMTP_PORT",
+  "EMAIL_SMTP_PORT",
+  "AUTH_EMAIL_SMTP_SECURE",
+  "EMAIL_SMTP_SECURE",
+  "AUTH_EMAIL_SMTP_USERNAME",
+  "EMAIL_SMTP_USERNAME",
+  "AUTH_EMAIL_SMTP_PASSWORD",
+  "EMAIL_SMTP_PASSWORD",
 ] as const;
 
 afterEach(() => {
@@ -109,6 +131,141 @@ describe("resolveSessionConfig", () => {
   test("throws for invalid secure boolean", () => {
     process.env.AUTH_SESSION_SECURE = "yes";
     expect(() => resolveSessionConfig()).toThrow("Invalid session secure");
+  });
+});
+
+describe("resolveMagicLinkConfig", () => {
+  test("uses defaults with auth sender", () => {
+    process.env.AUTH_MAGIC_LINK_SENDER = "noreply@example.com";
+    expect(resolveMagicLinkConfig()).toEqual({
+      ttlSeconds: 900,
+      sender: "noreply@example.com",
+    });
+  });
+
+  test("uses explicit ttl and fallback sender key", () => {
+    process.env.MAGIC_LINK_TTL_SECONDS = "1800";
+    process.env.EMAIL_FROM = "support@example.com";
+
+    expect(resolveMagicLinkConfig()).toEqual({
+      ttlSeconds: 1800,
+      sender: "support@example.com",
+    });
+  });
+
+  test("throws when sender is missing", () => {
+    expect(() => resolveMagicLinkConfig()).toThrow("Missing magic-link sender");
+  });
+
+  test("throws when sender is invalid", () => {
+    process.env.AUTH_MAGIC_LINK_SENDER = "invalid";
+    expect(() => resolveMagicLinkConfig()).toThrow("Invalid magic-link sender");
+  });
+
+  test("throws when ttl is invalid", () => {
+    process.env.AUTH_MAGIC_LINK_SENDER = "noreply@example.com";
+    process.env.AUTH_MAGIC_LINK_TTL_SECONDS = "-1";
+    expect(() => resolveMagicLinkConfig()).toThrow("Invalid magic-link ttlSeconds");
+  });
+});
+
+describe("resolveEmailTransportConfig", () => {
+  test("returns undefined when no email env is present", () => {
+    expect(resolveEmailTransportConfig()).toBeUndefined();
+  });
+
+  test("resolves ses transport by explicit type", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "ses";
+    process.env.AUTH_EMAIL_SES_REGION = "ap-southeast-1";
+
+    expect(resolveEmailTransportConfig()).toEqual({
+      type: "ses",
+      ses: { region: "ap-southeast-1" },
+    });
+  });
+
+  test("resolves smtp transport by explicit type", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "smtp";
+    process.env.AUTH_EMAIL_SMTP_HOST = "smtp.example.com";
+    process.env.AUTH_EMAIL_SMTP_PORT = "465";
+    process.env.AUTH_EMAIL_SMTP_SECURE = "true";
+    process.env.AUTH_EMAIL_SMTP_USERNAME = "user";
+    process.env.AUTH_EMAIL_SMTP_PASSWORD = "pass";
+
+    expect(resolveEmailTransportConfig()).toEqual({
+      type: "smtp",
+      smtp: {
+        host: "smtp.example.com",
+        port: 465,
+        secure: true,
+        username: "user",
+        password: "pass",
+      },
+    });
+  });
+
+  test("auto-detects ses transport from env", () => {
+    process.env.EMAIL_SES_REGION = "us-east-1";
+
+    expect(resolveEmailTransportConfig()).toEqual({
+      type: "ses",
+      ses: { region: "us-east-1" },
+    });
+  });
+
+  test("auto-detects smtp transport from env with defaults", () => {
+    process.env.EMAIL_SMTP_HOST = "smtp.mail.local";
+
+    expect(resolveEmailTransportConfig()).toEqual({
+      type: "smtp",
+      smtp: {
+        host: "smtp.mail.local",
+        port: 587,
+        secure: false,
+        username: undefined,
+        password: undefined,
+      },
+    });
+  });
+
+  test("throws when both ses and smtp are present without explicit type", () => {
+    process.env.EMAIL_SES_REGION = "us-east-1";
+    process.env.EMAIL_SMTP_HOST = "smtp.mail.local";
+
+    expect(() => resolveEmailTransportConfig()).toThrow(
+      "Ambiguous email transport config"
+    );
+  });
+
+  test("throws for invalid transport type", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "sendgrid";
+    expect(() => resolveEmailTransportConfig()).toThrow("Invalid email transport");
+  });
+
+  test("throws when ses transport misses region", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "ses";
+    expect(() => resolveEmailTransportConfig()).toThrow("Missing SES region");
+  });
+
+  test("throws when smtp transport misses host", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "smtp";
+    expect(() => resolveEmailTransportConfig()).toThrow("Missing SMTP host");
+  });
+
+  test("throws when smtp secure is invalid", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "smtp";
+    process.env.AUTH_EMAIL_SMTP_HOST = "smtp.mail.local";
+    process.env.AUTH_EMAIL_SMTP_SECURE = "1";
+
+    expect(() => resolveEmailTransportConfig()).toThrow("Invalid smtp secure");
+  });
+
+  test("throws when smtp port is out of range", () => {
+    process.env.AUTH_EMAIL_TRANSPORT = "smtp";
+    process.env.AUTH_EMAIL_SMTP_HOST = "smtp.mail.local";
+    process.env.AUTH_EMAIL_SMTP_PORT = "70000";
+
+    expect(() => resolveEmailTransportConfig()).toThrow("Invalid smtp port");
   });
 });
 
