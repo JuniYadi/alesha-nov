@@ -221,9 +221,21 @@ jobs:
             extra_args+=("--preload" "./packages/auth-react/src/test-setup.ts")
           fi
 
+          mkdir -p test-results
+
           echo "Coverage targets: ${targets[*]}"
           echo "Extra args: ${extra_args[*]}"
-          bun test --coverage --coverage-reporter=lcov "${extra_args[@]}" "${targets[@]}"
+          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml "${extra_args[@]}" "${targets[@]}"
+
+      - name: Upload test results to Codecov (Test Analytics)
+        if: needs.lint.outputs.any_changed == 'true' && hashFiles('test-results/junit.xml') != ''
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./test-results/junit.xml
+          report_type: test_results
+          fail_ci_if_error: true
+          verbose: true
 
       - name: Upload coverage to Codecov
         if: needs.lint.outputs.any_changed == 'true' && hashFiles('coverage/lcov.info') != ''
