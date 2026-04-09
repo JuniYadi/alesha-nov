@@ -2,14 +2,25 @@ import { createDatabaseClient, runMigrations, type DBConfig } from "@alesha-nov/
 import { randomBytes } from "node:crypto";
 import { authMigrations } from "./migrations";
 import type {
+  AuthAuditEvent,
+  AuthAuditSink,
   AuthService,
+  AuthServiceOptions,
+  AuthSession,
+  AuthSessionStrategy,
   EmailVerificationInput,
   LinkOAuthAccountInput,
   LoginInput,
+  LoginProtectionConfig,
   MagicLinkInput,
   OAuthAccountLink,
+  OAuthCallbackValidationInput,
+  OAuthCallbackValidationResult,
   OAuthLoginInput,
+  OAuthPKCEProviderMap,
   OAuthProvider,
+  PasswordPolicyValidationResult,
+  PasswordPolicyValidator,
   PasswordResetInput,
   ResetPasswordInput,
   SignupInput,
@@ -18,14 +29,168 @@ import type {
 import { buildAuthUser, getUserById, getUserRolesInternal } from "./user-store";
 import { assertProvider, hashPassword, hashToken, newId, normalizeEmail, normalizeRoles, verifyPassword } from "./utils";
 
-export async function createAuthService(dbConfig: DBConfig): Promise<AuthService> {
+type LoginAttemptState = {
+  attempts: number[];
+  lockedUntil: number;
+};
+
+type SessionRecord = {
+  userId: string;
+  expiresAt: number;
+};
+
+const DEFAULT_LOGIN_PROTECTION: LoginProtectionConfig = {
+  maxAttempts: 5,
+  lockoutSeconds: 300,
+  windowSeconds: 300,
+};
+
+const OAUTH_PKCE_PROVIDERS: OAuthPKCEProviderMap = {
+  google: { authorizeUrl: "https://accounts.google.com/o/oauth2/v2/auth" },
+  github: { authorizeUrl: "https://github.com/login/oauth/authorize" },
+};
+
+class InMemoryAuthSessionStrategy implements AuthSessionStrategy {
+  private readonly refreshStore = new Map<string, SessionRecord>();
+
+  async issueSession(user: { id: string }): Promise<AuthSession> {
+    const accessToken = randomBytes(24).toString("base64url");
+    const refreshToken = randomBytes(32).toString("base64url");
+    const expiresInSeconds = 15 * 60;
+    const refreshExpiresInSeconds = 7 * 24 * 60 * 60;
+
+    this.refreshStore.set(refreshToken, {
+      userId: user.id,
+      expiresAt: Date.now() + refreshExpiresInSeconds * 1000,
+    });
+
+    return {
+      accessToken,
+      refreshToken,
+      tokenType: "Bearer",
+      expiresInSeconds,
+      refreshExpiresInSeconds,
+      subject: user.id,
+    };
+  }
+
+  async refreshSession(refreshToken: string): Promise<AuthSession | null> {
+    const record = this.refreshStore.get(refreshToken);
+    if (!record) return null;
+
+    if (record.expiresAt < Date.now()) {
+      this.refreshStore.delete(refreshToken);
+      return null;
+    }
+
+    this.refreshStore.delete(refreshToken);
+
+    const accessToken = randomBytes(24).toString("base64url");
+    const nextRefreshToken = randomBytes(32).toString("base64url");
+    const expiresInSeconds = 15 * 60;
+    const refreshExpiresInSeconds = 7 * 24 * 60 * 60;
+
+    this.refreshStore.set(nextRefreshToken, {
+      userId: record.userId,
+      expiresAt: Date.now() + refreshExpiresInSeconds * 1000,
+    });
+
+    return {
+      accessToken,
+      refreshToken: nextRefreshToken,
+      tokenType: "Bearer",
+      expiresInSeconds,
+      refreshExpiresInSeconds,
+      subject: record.userId,
+    };
+  }
+}
+
+const defaultPasswordPolicyValidator: PasswordPolicyValidator = {
+  validate(): PasswordPolicyValidationResult {
+    return {
+      valid: true,
+      errors: [],
+    };
+  },
+};
+
+function toBase64Url(buffer: Buffer): string {
+  return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function createOAuthCodeVerifier(): string {
+  return toBase64Url(randomBytes(48));
+}
+
+function createOAuthCodeChallenge(codeVerifier: string): string {
+  return hashToken(codeVerifier);
+}
+
+function createOAuthState(): string {
+  return toBase64Url(randomBytes(18));
+}
+
+async function emitAuditEvent(auditSink: AuthAuditSink | undefined, event: AuthAuditEvent): Promise<void> {
+  if (!auditSink) return;
+  await auditSink.emit(event);
+}
+
+function pruneAttempts(attemptState: LoginAttemptState, windowSeconds: number): void {
+  const windowStart = Date.now() - windowSeconds * 1000;
+  attemptState.attempts = attemptState.attempts.filter((ts) => ts >= windowStart);
+}
+
+function ensureLoginAllowed(loginAttempts: Map<string, LoginAttemptState>, key: string, config: LoginProtectionConfig): string | null {
+  const state = loginAttempts.get(key);
+  if (!state) return null;
+
+  pruneAttempts(state, config.windowSeconds);
+
+  if (state.lockedUntil > Date.now()) {
+    const waitSeconds = Math.ceil((state.lockedUntil - Date.now()) / 1000);
+    return `Account locked. Try again in ${waitSeconds} seconds`;
+  }
+
+  return null;
+}
+
+function recordLoginFailure(loginAttempts: Map<string, LoginAttemptState>, key: string, config: LoginProtectionConfig): void {
+  const state = loginAttempts.get(key) ?? { attempts: [], lockedUntil: 0 };
+  pruneAttempts(state, config.windowSeconds);
+  state.attempts.push(Date.now());
+
+  if (state.attempts.length >= config.maxAttempts) {
+    state.lockedUntil = Date.now() + config.lockoutSeconds * 1000;
+    state.attempts = [];
+  }
+
+  loginAttempts.set(key, state);
+}
+
+function clearLoginFailures(loginAttempts: Map<string, LoginAttemptState>, key: string): void {
+  loginAttempts.delete(key);
+}
+
+export async function createAuthService(dbConfig: DBConfig, options: AuthServiceOptions = {}): Promise<AuthService> {
   const client = createDatabaseClient(dbConfig);
   await runMigrations(client, authMigrations);
+
+  const passwordPolicyValidator = options.passwordPolicyValidator ?? defaultPasswordPolicyValidator;
+  const auditSink = options.auditSink;
+  const loginProtection = options.loginProtection ?? DEFAULT_LOGIN_PROTECTION;
+  const sessionStrategy = options.sessionStrategy ?? new InMemoryAuthSessionStrategy();
+  const loginAttempts = new Map<string, LoginAttemptState>();
 
   return {
     async signup(input: SignupInput) {
       const id = newId();
       const email = normalizeEmail(input.email);
+      const passwordValidation = passwordPolicyValidator.validate(input.password);
+      if (!passwordValidation.valid) {
+        throw new Error((passwordValidation.errors ?? ["Password policy validation failed"]).join("; "));
+      }
+
       const passwordHash = hashPassword(input.password);
       const roles = normalizeRoles(input.roles ?? []);
 
@@ -45,22 +210,175 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
 
       const created = await getUserById(client, id);
       if (!created) throw new Error("Failed to load created user");
+
+      await emitAuditEvent(auditSink, {
+        type: "SIGNUP",
+        userId: created.id,
+        email: created.email,
+        metadata: { roleCount: created.roles.length },
+        occurredAt: new Date().toISOString(),
+      });
+
       return created;
     },
 
+    buildOAuthAuthorizeRequest(input) {
+      assertProvider(input.provider);
+
+      const providerConfig = OAUTH_PKCE_PROVIDERS[input.provider];
+      const state = input.state?.trim() ? input.state.trim() : createOAuthState();
+      const codeVerifier = createOAuthCodeVerifier();
+      const codeChallenge = createOAuthCodeChallenge(codeVerifier);
+      const scope = input.scope.map((value) => value.trim()).filter((value) => value.length > 0).join(" ");
+
+      const authorizeUrl = new URL(providerConfig.authorizeUrl);
+      authorizeUrl.searchParams.set("client_id", input.clientId);
+      authorizeUrl.searchParams.set("redirect_uri", input.redirectUri);
+      authorizeUrl.searchParams.set("response_type", "code");
+      authorizeUrl.searchParams.set("scope", scope);
+      authorizeUrl.searchParams.set("state", state);
+      authorizeUrl.searchParams.set("code_challenge", codeChallenge);
+      authorizeUrl.searchParams.set("code_challenge_method", "S256");
+
+      return {
+        provider: input.provider,
+        authorizationUrl: authorizeUrl.toString(),
+        state,
+        codeVerifier,
+        codeChallenge,
+        codeChallengeMethod: "S256",
+      };
+    },
+
+    validateOAuthCallback(input: OAuthCallbackValidationInput): OAuthCallbackValidationResult {
+      assertProvider(input.callback.provider);
+
+      if (input.callback.error) {
+        return {
+          valid: false,
+          reason: input.callback.error,
+        };
+      }
+
+      if (!input.callback.state || input.callback.state !== input.expectedState) {
+        return {
+          valid: false,
+          reason: "Invalid OAuth state",
+        };
+      }
+
+      if (!input.callback.code) {
+        return {
+          valid: false,
+          reason: "Missing authorization code",
+        };
+      }
+
+      if (!input.codeVerifier || input.codeVerifier.length < 43) {
+        return {
+          valid: false,
+          reason: "Invalid PKCE code verifier",
+        };
+      }
+
+      return {
+        valid: true,
+      };
+    },
+
     async login(input: LoginInput) {
+      const normalizedEmail = normalizeEmail(input.email);
+      const lockReason = ensureLoginAllowed(loginAttempts, normalizedEmail, loginProtection);
+      if (lockReason) {
+        await emitAuditEvent(auditSink, {
+          type: "LOGIN_FAIL",
+          email: normalizedEmail,
+          reason: lockReason,
+          occurredAt: new Date().toISOString(),
+        });
+        throw new Error(lockReason);
+      }
+
       const rows = await client.sql`
         SELECT id, email, password_hash, name, image, email_verified_at, created_at
         FROM auth_users
-        WHERE email = ${normalizeEmail(input.email)}
+        WHERE email = ${normalizedEmail}
         LIMIT 1
       `;
 
       const user = rows[0] as UserRow | undefined;
-      if (!user) return null;
-      if (!verifyPassword(input.password, user.password_hash)) return null;
+      if (!user) {
+        recordLoginFailure(loginAttempts, normalizedEmail, loginProtection);
+        await emitAuditEvent(auditSink, {
+          type: "LOGIN_FAIL",
+          email: normalizedEmail,
+          reason: "Invalid credentials",
+          occurredAt: new Date().toISOString(),
+        });
+        return null;
+      }
 
-      return buildAuthUser(client, user);
+      if (!verifyPassword(input.password, user.password_hash)) {
+        recordLoginFailure(loginAttempts, normalizedEmail, loginProtection);
+        await emitAuditEvent(auditSink, {
+          type: "LOGIN_FAIL",
+          userId: user.id,
+          email: normalizedEmail,
+          reason: "Invalid credentials",
+          occurredAt: new Date().toISOString(),
+        });
+        return null;
+      }
+
+      clearLoginFailures(loginAttempts, normalizedEmail);
+      const built = await buildAuthUser(client, user);
+      await emitAuditEvent(auditSink, {
+        type: "LOGIN",
+        userId: built.id,
+        email: built.email,
+        occurredAt: new Date().toISOString(),
+      });
+
+      return built;
+    },
+
+    async issueSession(userId: string) {
+      const user = await getUserById(client, userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      const session = await sessionStrategy.issueSession(user);
+      await emitAuditEvent(auditSink, {
+        type: "SESSION_ISSUED",
+        userId: user.id,
+        email: user.email,
+        metadata: { expiresInSeconds: session.expiresInSeconds },
+        occurredAt: new Date().toISOString(),
+      });
+
+      return session;
+    },
+
+    async refreshSession(refreshToken: string) {
+      const refreshed = await sessionStrategy.refreshSession(refreshToken);
+      if (!refreshed) {
+        await emitAuditEvent(auditSink, {
+          type: "SESSION_REFRESH_FAIL",
+          reason: "Invalid refresh token",
+          occurredAt: new Date().toISOString(),
+        });
+        return null;
+      }
+
+      await emitAuditEvent(auditSink, {
+        type: "SESSION_REFRESH",
+        userId: refreshed.subject,
+        metadata: { expiresInSeconds: refreshed.expiresInSeconds },
+        occurredAt: new Date().toISOString(),
+      });
+
+      return refreshed;
     },
 
     async issueMagicLinkToken(input: MagicLinkInput) {
@@ -163,9 +481,37 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
 
       const row = rows[0] as { user_id: string; expires_at: string; used_at: string | null } | undefined;
 
-      if (!row) return false;
-      if (row.used_at) return false;
-      if (new Date(row.expires_at).getTime() < Date.now()) return false;
+      if (!row) {
+        await emitAuditEvent(auditSink, {
+          type: "PASSWORD_RESET_FAIL",
+          reason: "Token not found",
+          occurredAt: new Date().toISOString(),
+        });
+        return false;
+      }
+      if (row.used_at) {
+        await emitAuditEvent(auditSink, {
+          type: "PASSWORD_RESET_FAIL",
+          userId: row.user_id,
+          reason: "Token already used",
+          occurredAt: new Date().toISOString(),
+        });
+        return false;
+      }
+      if (new Date(row.expires_at).getTime() < Date.now()) {
+        await emitAuditEvent(auditSink, {
+          type: "PASSWORD_RESET_FAIL",
+          userId: row.user_id,
+          reason: "Token expired",
+          occurredAt: new Date().toISOString(),
+        });
+        return false;
+      }
+
+      const passwordValidation = passwordPolicyValidator.validate(input.newPassword);
+      if (!passwordValidation.valid) {
+        throw new Error((passwordValidation.errors ?? ["Password policy validation failed"]).join("; "));
+      }
 
       const passwordHash = hashPassword(input.newPassword);
 
@@ -180,6 +526,12 @@ export async function createAuthService(dbConfig: DBConfig): Promise<AuthService
         SET used_at = ${new Date().toISOString()}
         WHERE token_hash = ${tokenHash}
       `;
+
+      await emitAuditEvent(auditSink, {
+        type: "PASSWORD_RESET",
+        userId: row.user_id,
+        occurredAt: new Date().toISOString(),
+      });
 
       return true;
     },

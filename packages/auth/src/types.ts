@@ -28,6 +28,41 @@ export interface ResetPasswordInput {
 
 export type OAuthProvider = "google" | "github";
 
+export interface OAuthAuthorizeInput {
+  provider: OAuthProvider;
+  clientId: string;
+  redirectUri: string;
+  scope: string[];
+  state?: string;
+}
+
+export interface OAuthAuthorizeRequest {
+  provider: OAuthProvider;
+  authorizationUrl: string;
+  state: string;
+  codeVerifier: string;
+  codeChallenge: string;
+  codeChallengeMethod: "S256";
+}
+
+export interface OAuthCallbackInput {
+  provider: OAuthProvider;
+  code?: string;
+  state?: string;
+  error?: string;
+}
+
+export interface OAuthCallbackValidationInput {
+  callback: OAuthCallbackInput;
+  expectedState: string;
+  codeVerifier: string;
+}
+
+export interface OAuthCallbackValidationResult {
+  valid: boolean;
+  reason?: string;
+}
+
 export interface OAuthLoginInput {
   provider: OAuthProvider;
   providerAccountId: string;
@@ -71,9 +106,82 @@ export interface EmailVerificationInput {
   ttlSeconds?: number;
 }
 
+export type PasswordPolicyValidationResult = {
+  valid: boolean;
+  errors?: string[];
+};
+
+export interface PasswordPolicyValidator {
+  validate(password: string): PasswordPolicyValidationResult;
+}
+
+export type AuthAuditEventType =
+  | "SIGNUP"
+  | "LOGIN"
+  | "LOGIN_FAIL"
+  | "PASSWORD_RESET"
+  | "PASSWORD_RESET_FAIL"
+  | "SESSION_ISSUED"
+  | "SESSION_REFRESH"
+  | "SESSION_REFRESH_FAIL";
+
+export interface AuthAuditEvent {
+  type: AuthAuditEventType;
+  userId?: string;
+  email?: string;
+  provider?: OAuthProvider;
+  reason?: string;
+  metadata?: Record<string, string | number | boolean | null>;
+  occurredAt: string;
+}
+
+export interface AuthAuditSink {
+  emit(event: AuthAuditEvent): Promise<void>;
+}
+
+export interface LoginProtectionConfig {
+  maxAttempts: number;
+  lockoutSeconds: number;
+  windowSeconds: number;
+}
+
+export interface AuthSession {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresInSeconds: number;
+  refreshExpiresInSeconds?: number;
+  subject: string;
+}
+
+export interface AuthSessionStrategy {
+  issueSession(user: AuthUser): Promise<AuthSession>;
+  refreshSession(refreshToken: string): Promise<AuthSession | null>;
+}
+
+export interface AuthServiceOptions {
+  passwordPolicyValidator?: PasswordPolicyValidator;
+  auditSink?: AuthAuditSink;
+  loginProtection?: LoginProtectionConfig;
+  sessionStrategy?: AuthSessionStrategy;
+}
+
+export interface OAuthAuthorizationProviderConfig {
+  authorizeUrl: string;
+}
+
+export interface OAuthPKCEProviderMap {
+  google: OAuthAuthorizationProviderConfig;
+  github: OAuthAuthorizationProviderConfig;
+}
+
 export interface AuthService {
   signup(input: SignupInput): Promise<AuthUser>;
   login(input: LoginInput): Promise<AuthUser | null>;
+  buildOAuthAuthorizeRequest(input: OAuthAuthorizeInput): OAuthAuthorizeRequest;
+  validateOAuthCallback(input: OAuthCallbackValidationInput): OAuthCallbackValidationResult;
+  issueSession(userId: string): Promise<AuthSession>;
+  refreshSession(refreshToken: string): Promise<AuthSession | null>;
   issueMagicLinkToken(input: MagicLinkInput): Promise<string>;
   verifyMagicLinkToken(token: string): Promise<AuthUser | null>;
   issuePasswordResetToken(input: PasswordResetInput): Promise<string>;
