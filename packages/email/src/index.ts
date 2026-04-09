@@ -128,6 +128,35 @@ export interface RetryOptions {
   shouldRetry?: (error: unknown) => boolean;
 }
 
+export interface RateLimitOptions {
+  burstLimit: number;       // max tokens in bucket (burst capacity)
+  refillRatePerSecond: number; // sustained tokens per second
+}
+
+export function withRateLimit(provider: EmailProvider, options: RateLimitOptions): EmailProvider {
+  let tokens = options.burstLimit;
+  let lastRefill = Date.now();
+
+  function refill() {
+    const now = Date.now();
+    const elapsed = (now - lastRefill) / 1000;
+    const refilled = elapsed * options.refillRatePerSecond;
+    tokens = Math.min(options.burstLimit, tokens + refilled);
+    lastRefill = now;
+  }
+
+  return {
+    async send(message) {
+      refill();
+      if (tokens < 1) {
+        throw new Error("Rate limit exceeded: burst capacity exhausted");
+      }
+      tokens -= 1;
+      return provider.send(message);
+    },
+  };
+}
+
 export function withRetry(provider: EmailProvider, options: RetryOptions): EmailProvider {
   const shouldRetry = options.shouldRetry ?? (() => true);
 
