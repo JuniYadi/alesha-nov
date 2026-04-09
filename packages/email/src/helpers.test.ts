@@ -3,12 +3,22 @@ import {
   generateOtp,
   generateVerificationToken,
   createTokenWithMetadata,
+  createOtpWithMetadata,
+  createVerificationTokenWithMetadata,
   withRetry,
   withRateLimit,
   templateRenderer,
+  authTemplateRenderer,
+  renderAuthTemplate,
   renderMagicLinkEmail,
   renderVerifyEmailEmail,
   renderResetPasswordEmail,
+  calculateExponentialBackoffDelay,
+  defaultRetryableErrorStrategy,
+  noRetryErrorStrategy,
+  mapSesDeliveryStatusEvent,
+  mapSmtpDeliveryStatusEvent,
+  dispatchDeliveryStatusEvent,
 } from "./index";
 
 describe("email helpers", () => {
@@ -167,9 +177,172 @@ describe("withRetry decorator", () => {
       maxAttempts: 5,
       initialDelayMs: 1,
       maxDelayMs: 10,
-      shouldRetry: (e) => e.message !== "fatal",
+      shouldRetry: (e) => e instanceof Error && e.message !== "fatal",
     });
     await expect(retrier.send(message)).rejects.toThrow("fatal");
     expect(calls).toBe(1);
+  });
+
+  test("uses custom backoff strategy callback", async () => {
+    const delays: number[] = [];
+    let calls = 0;
+    const mock = {
+      send: async () => {
+        calls++;
+        if (calls < 2) throw new Error("retry me");
+        return { id: "done" };
+      },
+    };
+
+    const retrier = withRetry(mock, {
+      maxAttempts: 2,
+      initialDelayMs: 5,
+      maxDelayMs: 50,
+      backoffStrategy: (attempt) => {
+        delays.push(attempt);
+        return 1;
+      },
+    });
+
+    await expect(retrier.send(message)).resolves.toEqual({ id: "done" });
+    expect(delays).toEqual([1]);
+  });
+});
+
+describe("retry utility helpers", () => {
+  test("calculateExponentialBackoffDelay doubles by attempt and respects max", () => {
+    expect(calculateExponentialBackoffDelay(1, 10, 100)).toBe(10);
+    expect(calculateExponentialBackoffDelay(2, 10, 100)).toBe(20);
+    expect(calculateExponentialBackoffDelay(5, 10, 100)).toBe(100);
+  });
+
+  test("defaultRetryableErrorStrategy returns true for transient messages", () => {
+    expect(defaultRetryableErrorStrategy(new Error("network timeout"))).toBe(true);
+    expect(defaultRetryableErrorStrategy(new Error("rate exceeded"))).toBe(true);
+    expect(defaultRetryableErrorStrategy("non-error")).toBe(true);
+  });
+
+  test("noRetryErrorStrategy always returns false", () => {
+    expect(noRetryErrorStrategy()).toBe(false);
+  });
+});
+
+describe("delivery status mapping", () => {
+  test("maps SES delivery event", () => {
+    const event = mapSesDeliveryStatusEvent({
+      eventType: "Delivery",
+      mail: { messageId: "m1", destination: ["user@example.com"], timestamp: "2026-01-01T00:00:00.000Z" },
+    });
+
+    expect(event.provider).toBe("ses");
+    expect(event.status).toBe("delivered");
+    expect(event.messageId).toBe("m1");
+    expect(event.recipient).toBe("user@example.com");
+    expect(event.timestamp).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  test("maps SES bounce event", () => {
+    const event = mapSesDeliveryStatusEvent({
+      eventType: "Bounce",
+      mail: { messageId: "m2", destination: ["bounce@example.com"] },
+      bounce: {
+        bounceType: "Permanent",
+        bouncedRecipients: [{ emailAddress: "bounce@example.com", diagnosticCode: "550 No such user" }],
+      },
+    });
+
+    expect(event.status).toBe("bounced");
+    expect(event.reason).toContain("550");
+  });
+
+  test("maps SES complaint and reject events", () => {
+    const complaint = mapSesDeliveryStatusEvent({
+      eventType: "Complaint",
+      mail: { messageId: "m3" },
+      complaint: { complainedRecipients: [{ emailAddress: "complaint@example.com" }] },
+    });
+    const reject = mapSesDeliveryStatusEvent({
+      eventType: "Reject",
+      mail: { messageId: "m4", destination: ["reject@example.com"] },
+      reject: { reason: "Policy reject" },
+    });
+
+    expect(complaint.status).toBe("complained");
+    expect(complaint.recipient).toBe("complaint@example.com");
+    expect(reject.status).toBe("rejected");
+    expect(reject.reason).toBe("Policy reject");
+  });
+
+  test("maps SES unknown event type to unknown status", () => {
+    const unknown = mapSesDeliveryStatusEvent({
+      eventType: "RenderingFailure",
+      mail: { messageId: "m5", destination: ["unknown@example.com"] },
+    });
+
+    expect(unknown.status).toBe("unknown");
+    expect(unknown.messageId).toBe("m5");
+    expect(unknown.recipient).toBe("unknown@example.com");
+  });
+
+  test("maps SMTP statuses by response code", () => {
+    expect(mapSmtpDeliveryStatusEvent({ responseCode: 250, messageId: "s1" }).status).toBe("delivered");
+    expect(mapSmtpDeliveryStatusEvent({ responseCode: 421, messageId: "s2" }).status).toBe("temporary-failure");
+    expect(mapSmtpDeliveryStatusEvent({ responseCode: 550, messageId: "s3" }).status).toBe("bounced");
+    expect(mapSmtpDeliveryStatusEvent({ responseCode: 0, messageId: "s4" }).status).toBe("unknown");
+  });
+
+  test("dispatchDeliveryStatusEvent calls callback when provided", async () => {
+    let called = false;
+    const event = mapSmtpDeliveryStatusEvent({ responseCode: 250, messageId: "s1", recipient: "user@example.com" });
+
+    const result = await dispatchDeliveryStatusEvent(event, async (e) => {
+      called = true;
+      expect(e.messageId).toBe("s1");
+    });
+
+    expect(called).toBe(true);
+    expect(result).toEqual(event);
+  });
+});
+
+describe("auth template rendering", () => {
+  test("renderAuthTemplate routes by key", () => {
+    const magic = renderAuthTemplate("magic-link", {
+      email: "user@example.com",
+      link: "https://example.com/magic",
+      expiresInMinutes: 10,
+    });
+
+    const verify = authTemplateRenderer.render("verify-email", {
+      email: "user@example.com",
+      code: "123456",
+      expiresInMinutes: 5,
+    });
+
+    const reset = authTemplateRenderer.render("reset-password", {
+      email: "user@example.com",
+      code: "654321",
+      expiresInMinutes: 30,
+    });
+
+    expect(magic.subject).toBe("Your Magic Link");
+    expect(verify.subject).toBe("Verify Your Email");
+    expect(reset.subject).toBe("Reset Your Password");
+  });
+});
+
+describe("token metadata helpers", () => {
+  test("createOtpWithMetadata returns token + ttl metadata", () => {
+    const result = createOtpWithMetadata(6, 120);
+    expect(result.token).toMatch(/^\d{6}$/);
+    expect(result.ttlSeconds).toBe(120);
+    expect(new Date(result.expiresAt).toISOString()).toBe(result.expiresAt);
+  });
+
+  test("createVerificationTokenWithMetadata returns token + ttl metadata", () => {
+    const result = createVerificationTokenWithMetadata(20, 300);
+    expect(result.token).toMatch(/^[A-Za-z0-9]{20}$/);
+    expect(result.ttlSeconds).toBe(300);
+    expect(new Date(result.expiresAt).toISOString()).toBe(result.expiresAt);
   });
 });
