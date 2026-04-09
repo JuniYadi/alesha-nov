@@ -32,7 +32,7 @@ describe("createAuthService oauth + magic-link", () => {
 
     expect(typeof token).toBe("string");
     expect(token.length > 10).toBe(true);
-    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_magic_links"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_magic_link_tokens"))).toBe(true);
   });
 
   test("verifyMagicLinkToken returns user and marks token used", async () => {
@@ -61,7 +61,7 @@ describe("createAuthService oauth + magic-link", () => {
 
     expect(user?.id).toBe("u-1");
     expect(user?.roles).toEqual(["admin"]);
-    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_magic_links"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_magic_link_tokens"))).toBe(true);
     expect(sqlCalls.some((c) => c.text.includes("UPDATE auth_users"))).toBe(true);
   });
 

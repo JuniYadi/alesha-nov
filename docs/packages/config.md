@@ -14,10 +14,11 @@ Database client factory, migration runner, and environment config helpers. Suppo
 
 ```ts
 export {
-  resolveDBType,      // Resolve DB_TYPE env var to DBType
+  resolveDBType,        // Resolve DB_TYPE env var to DBType
   createDatabaseClient, // Create SQL client + config wrapper
   ensureMigrationsTable,
   runMigrations,
+  authMigrationsBundle, // Canonical auth migration bundle (shared with @alesha-nov/auth)
 }
 export type { DBType, DBConfig, Migration, DatabaseClient }
 ```

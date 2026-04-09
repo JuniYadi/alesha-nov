@@ -181,9 +181,12 @@ The service auto-creates these tables via migrations:
 | Table | Purpose |
 |-------|---------|
 | `auth_users` | Core user records (id, email, password_hash, name, image) |
-| `auth_magic_links` | Magic link tokens (hashed, with expiry) |
+| `auth_sessions` | Session records (token hash, expiry, user linkage) |
+| `auth_magic_link_tokens` | Magic link tokens (hashed, with expiry) |
 | `auth_user_roles` | Role assignments per user |
 | `auth_oauth_accounts` | Linked OAuth accounts per user |
+| `auth_password_reset_tokens` | Password reset tokens (hashed, with expiry) |
+| `auth_email_verification_tokens` | Email verification tokens (hashed, with expiry) |
 
 ## Utils
 

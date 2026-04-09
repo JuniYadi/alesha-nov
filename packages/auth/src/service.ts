@@ -394,7 +394,7 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
       await client.sql`
-        INSERT INTO auth_magic_links (token_hash, user_id, expires_at)
+        INSERT INTO auth_magic_link_tokens (token_hash, user_id, expires_at)
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
 
@@ -405,7 +405,7 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
       const tokenHash = hashToken(token);
       const rows = await client.sql`
         SELECT aml.user_id, aml.expires_at, aml.used_at, u.id, u.email, u.password_hash, u.name, u.image, u.email_verified_at, u.created_at
-        FROM auth_magic_links aml
+        FROM auth_magic_link_tokens aml
         JOIN auth_users u ON u.id = aml.user_id
         WHERE aml.token_hash = ${tokenHash}
         LIMIT 1
@@ -431,7 +431,7 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
       if (new Date(row.expires_at).getTime() < Date.now()) return null;
 
       await client.sql`
-        UPDATE auth_magic_links
+        UPDATE auth_magic_link_tokens
         SET used_at = ${new Date().toISOString()}
         WHERE token_hash = ${tokenHash}
       `;
