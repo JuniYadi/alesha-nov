@@ -319,4 +319,62 @@ describe("createAuthService security + auth contracts", () => {
     expect(events).toContain("SESSION_REFRESH");
     expect(events).toContain("SESSION_REFRESH_FAIL");
   });
+
+  test("default in-memory session strategy refreshes valid token", async () => {
+    queue.push(
+      [
+        {
+          id: "u-default-refresh",
+          email: "default-refresh@example.com",
+          password_hash: "x",
+          name: null,
+          image: null,
+          email_verified_at: null,
+          created_at: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+      [{ role: "member" }]
+    );
+
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+
+    const session = await svc.issueSession("u-default-refresh");
+    const refreshed = await svc.refreshSession(session.refreshToken);
+
+    expect(refreshed).not.toBeNull();
+    expect(refreshed?.subject).toBe("u-default-refresh");
+    expect(refreshed?.refreshToken).not.toBe(session.refreshToken);
+    await expect(svc.refreshSession(session.refreshToken)).resolves.toBeNull();
+  });
+
+  test("default in-memory session strategy rejects expired refresh token", async () => {
+    const originalNow = Date.now;
+    let now = 1700000000000;
+    Date.now = () => now;
+
+    try {
+      queue.push(
+        [
+          {
+            id: "u-expired-refresh",
+            email: "expired-refresh@example.com",
+            password_hash: "x",
+            name: null,
+            image: null,
+            email_verified_at: null,
+            created_at: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+        [{ role: "member" }]
+      );
+
+      const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+      const session = await svc.issueSession("u-expired-refresh");
+
+      now += 8 * 24 * 60 * 60 * 1000;
+      await expect(svc.refreshSession(session.refreshToken)).resolves.toBeNull();
+    } finally {
+      Date.now = originalNow;
+    }
+  });
 });
