@@ -126,6 +126,232 @@ export interface RetryOptions {
   initialDelayMs: number;
   maxDelayMs: number;
   shouldRetry?: (error: unknown) => boolean;
+  backoffStrategy?: (attempt: number, initialDelayMs: number, maxDelayMs: number) => number;
+}
+
+export function calculateExponentialBackoffDelay(
+  attempt: number,
+  initialDelayMs: number,
+  maxDelayMs: number
+): number {
+  return Math.min(maxDelayMs, initialDelayMs * Math.pow(2, Math.max(0, attempt - 1)));
+}
+
+export function defaultRetryableErrorStrategy(error: unknown): boolean {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (!message) {
+    return true;
+  }
+
+  return (
+    message.includes("timeout") ||
+    message.includes("throttle") ||
+    message.includes("rate") ||
+    message.includes("temporar") ||
+    message.includes("network") ||
+    message.includes("connection")
+  );
+}
+
+export function noRetryErrorStrategy(): boolean {
+  return false;
+}
+
+export interface DeliveryStatusEvent {
+  provider: "ses" | "smtp" | "unknown";
+  status: "delivered" | "bounced" | "complained" | "rejected" | "temporary-failure" | "unknown";
+  messageId?: string;
+  recipient?: string;
+  reason?: string;
+  timestamp: string;
+  raw: unknown;
+}
+
+export interface SesDeliveryStatusInput {
+  eventType?: string;
+  mail?: {
+    messageId?: string;
+    destination?: string[];
+    timestamp?: string;
+  };
+  bounce?: {
+    bounceType?: string;
+    bouncedRecipients?: Array<{ emailAddress?: string; diagnosticCode?: string }>;
+  };
+  complaint?: {
+    complainedRecipients?: Array<{ emailAddress?: string }>;
+  };
+  reject?: {
+    reason?: string;
+  };
+}
+
+export interface SmtpDeliveryStatusInput {
+  responseCode?: number;
+  response?: string;
+  messageId?: string;
+  recipient?: string;
+}
+
+export type DeliveryStatusCallback = (event: DeliveryStatusEvent) => void | Promise<void>;
+
+export function mapSesDeliveryStatusEvent(input: SesDeliveryStatusInput): DeliveryStatusEvent {
+  const eventType = (input.eventType ?? "").toLowerCase();
+  const recipient = input.mail?.destination?.[0] ?? input.bounce?.bouncedRecipients?.[0]?.emailAddress;
+
+  if (eventType.includes("delivery")) {
+    return {
+      provider: "ses",
+      status: "delivered",
+      messageId: input.mail?.messageId,
+      recipient,
+      timestamp: input.mail?.timestamp ?? new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  if (eventType.includes("bounce")) {
+    return {
+      provider: "ses",
+      status: "bounced",
+      messageId: input.mail?.messageId,
+      recipient,
+      reason: input.bounce?.bouncedRecipients?.[0]?.diagnosticCode ?? input.bounce?.bounceType,
+      timestamp: input.mail?.timestamp ?? new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  if (eventType.includes("complaint")) {
+    return {
+      provider: "ses",
+      status: "complained",
+      messageId: input.mail?.messageId,
+      recipient: input.complaint?.complainedRecipients?.[0]?.emailAddress ?? recipient,
+      timestamp: input.mail?.timestamp ?? new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  if (eventType.includes("reject")) {
+    return {
+      provider: "ses",
+      status: "rejected",
+      messageId: input.mail?.messageId,
+      recipient,
+      reason: input.reject?.reason,
+      timestamp: input.mail?.timestamp ?? new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  return {
+    provider: "ses",
+    status: "unknown",
+    messageId: input.mail?.messageId,
+    recipient,
+    timestamp: input.mail?.timestamp ?? new Date().toISOString(),
+    raw: input,
+  };
+}
+
+export function mapSmtpDeliveryStatusEvent(input: SmtpDeliveryStatusInput): DeliveryStatusEvent {
+  const code = input.responseCode ?? 0;
+
+  if (code >= 200 && code < 300) {
+    return {
+      provider: "smtp",
+      status: "delivered",
+      messageId: input.messageId,
+      recipient: input.recipient,
+      reason: input.response,
+      timestamp: new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  if (code >= 400 && code < 500) {
+    return {
+      provider: "smtp",
+      status: "temporary-failure",
+      messageId: input.messageId,
+      recipient: input.recipient,
+      reason: input.response,
+      timestamp: new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  if (code >= 500) {
+    return {
+      provider: "smtp",
+      status: "bounced",
+      messageId: input.messageId,
+      recipient: input.recipient,
+      reason: input.response,
+      timestamp: new Date().toISOString(),
+      raw: input,
+    };
+  }
+
+  return {
+    provider: "smtp",
+    status: "unknown",
+    messageId: input.messageId,
+    recipient: input.recipient,
+    reason: input.response,
+    timestamp: new Date().toISOString(),
+    raw: input,
+  };
+}
+
+export async function dispatchDeliveryStatusEvent(
+  event: DeliveryStatusEvent,
+  callback?: DeliveryStatusCallback
+): Promise<DeliveryStatusEvent> {
+  if (callback) {
+    await callback(event);
+  }
+
+  return event;
+}
+
+export function createOtpWithMetadata(length = 6, ttlSeconds = 300): TokenWithMetadata {
+  return createTokenWithMetadata(generateOtp(length), ttlSeconds);
+}
+
+export function createVerificationTokenWithMetadata(length = 32, ttlSeconds = 900): TokenWithMetadata {
+  return createTokenWithMetadata(generateVerificationToken(length), ttlSeconds);
+}
+
+export type AuthTemplateKey = "magic-link" | "verify-email" | "reset-password";
+
+export interface AuthTemplateRenderer {
+  render(template: AuthTemplateKey, payload: MagicLinkPayload | VerifyEmailPayload | ResetPasswordPayload): {
+    subject: string;
+    html: string;
+    text: string;
+  };
+}
+
+export const authTemplateRenderer: AuthTemplateRenderer = {
+  render(template, payload) {
+    switch (template) {
+      case "magic-link":
+        return renderMagicLinkEmail(payload as MagicLinkPayload);
+      case "verify-email":
+        return renderVerifyEmailEmail(payload as VerifyEmailPayload);
+      case "reset-password":
+        return renderResetPasswordEmail(payload as ResetPasswordPayload);
+    }
+  },
+};
+
+export function renderAuthTemplate(
+  template: AuthTemplateKey,
+  payload: MagicLinkPayload | VerifyEmailPayload | ResetPasswordPayload
+): { subject: string; html: string; text: string } {
+  return authTemplateRenderer.render(template, payload);
 }
 
 // ── Template renderer ──────────────────────────────────────────────────────
@@ -231,6 +457,7 @@ export function withRateLimit(provider: EmailProvider, options: RateLimitOptions
 
 export function withRetry(provider: EmailProvider, options: RetryOptions): EmailProvider {
   const shouldRetry = options.shouldRetry ?? (() => true);
+  const backoffStrategy = options.backoffStrategy ?? calculateExponentialBackoffDelay;
 
   return {
     async send(message) {
@@ -248,10 +475,7 @@ export function withRetry(provider: EmailProvider, options: RetryOptions): Email
             break;
           }
 
-          const delay = Math.min(
-            options.maxDelayMs,
-            options.initialDelayMs * Math.pow(2, attempt - 1)
-          );
+          const delay = backoffStrategy(attempt, options.initialDelayMs, options.maxDelayMs);
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
       }
