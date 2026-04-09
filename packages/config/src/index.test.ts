@@ -4,17 +4,32 @@ import {
   resolveDBType,
   resolveJWTSecret,
   resolveOAuthConfig,
+  resolveSessionConfig,
 } from "./index";
 
+const ENV_KEYS = [
+  "AUTH_JWT_SECRET",
+  "JWT_SECRET",
+  "AUTH_OAUTH_GOOGLE_CLIENT_ID",
+  "AUTH_OAUTH_GOOGLE_CLIENT_SECRET",
+  "AUTH_OAUTH_GOOGLE_REDIRECT_URI",
+  "AUTH_OAUTH_GITHUB_CLIENT_ID",
+  "AUTH_OAUTH_GITHUB_CLIENT_SECRET",
+  "AUTH_OAUTH_GITHUB_REDIRECT_URI",
+  "AUTH_SESSION_COOKIE_NAME",
+  "SESSION_COOKIE_NAME",
+  "AUTH_SESSION_TTL_SECONDS",
+  "SESSION_TTL_SECONDS",
+  "AUTH_SESSION_SECURE",
+  "SESSION_SECURE",
+  "AUTH_SESSION_SAME_SITE",
+  "SESSION_SAME_SITE",
+] as const;
+
 afterEach(() => {
-  delete process.env.AUTH_JWT_SECRET;
-  delete process.env.JWT_SECRET;
-  delete process.env.AUTH_OAUTH_GOOGLE_CLIENT_ID;
-  delete process.env.AUTH_OAUTH_GOOGLE_CLIENT_SECRET;
-  delete process.env.AUTH_OAUTH_GOOGLE_REDIRECT_URI;
-  delete process.env.AUTH_OAUTH_GITHUB_CLIENT_ID;
-  delete process.env.AUTH_OAUTH_GITHUB_CLIENT_SECRET;
-  delete process.env.AUTH_OAUTH_GITHUB_REDIRECT_URI;
+  for (const key of ENV_KEYS) {
+    delete process.env[key];
+  }
 });
 
 describe("resolveDBType", () => {
@@ -43,11 +58,66 @@ describe("resolveJWTSecret", () => {
   });
 });
 
+describe("resolveSessionConfig", () => {
+  test("returns defaults when env is missing", () => {
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: "alesha_session",
+      ttlSeconds: 604800,
+      secure: false,
+      sameSite: "lax",
+    });
+  });
+
+  test("resolves explicit auth session env vars", () => {
+    process.env.AUTH_SESSION_COOKIE_NAME = "auth_cookie";
+    process.env.AUTH_SESSION_TTL_SECONDS = "1200";
+    process.env.AUTH_SESSION_SECURE = "true";
+    process.env.AUTH_SESSION_SAME_SITE = "strict";
+
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: "auth_cookie",
+      ttlSeconds: 1200,
+      secure: true,
+      sameSite: "strict",
+    });
+  });
+
+  test("supports fallback session env keys", () => {
+    process.env.SESSION_COOKIE_NAME = "legacy_cookie";
+    process.env.SESSION_TTL_SECONDS = "3600";
+    process.env.SESSION_SECURE = "false";
+    process.env.SESSION_SAME_SITE = "none";
+
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: "legacy_cookie",
+      ttlSeconds: 3600,
+      secure: false,
+      sameSite: "none",
+    });
+  });
+
+  test("throws for invalid sameSite value", () => {
+    process.env.AUTH_SESSION_SAME_SITE = "invalid";
+    expect(() => resolveSessionConfig()).toThrow("Invalid session sameSite value");
+  });
+
+  test("throws for invalid ttl value", () => {
+    process.env.AUTH_SESSION_TTL_SECONDS = "0";
+    expect(() => resolveSessionConfig()).toThrow("Invalid session ttlSeconds");
+  });
+
+  test("throws for invalid secure boolean", () => {
+    process.env.AUTH_SESSION_SECURE = "yes";
+    expect(() => resolveSessionConfig()).toThrow("Invalid session secure");
+  });
+});
+
 describe("resolveOAuthConfig", () => {
   test("returns provider configs from env", () => {
     process.env.AUTH_OAUTH_GOOGLE_CLIENT_ID = "google-id";
     process.env.AUTH_OAUTH_GOOGLE_CLIENT_SECRET = "google-secret";
-    process.env.AUTH_OAUTH_GOOGLE_REDIRECT_URI = "https://app.local/google/callback";
+    process.env.AUTH_OAUTH_GOOGLE_REDIRECT_URI =
+      "https://app.local/google/callback";
 
     const oauth = resolveOAuthConfig();
 

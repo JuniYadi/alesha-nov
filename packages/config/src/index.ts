@@ -77,12 +77,60 @@ function readEnv(keys: string[]): string | undefined {
   return undefined;
 }
 
+function parsePositiveInteger(value: string, fieldName: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`Invalid ${fieldName}. Must be a positive integer.`);
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`Invalid ${fieldName}. Must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+function parseBoolean(value: string, fieldName: string): boolean {
+  const normalized = value.toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  throw new Error(`Invalid ${fieldName}. Supported values: true | false`);
+}
+
+function parseSessionSameSite(value: string): SessionSameSite {
+  const normalized = value.toLowerCase();
+  if (normalized === "lax" || normalized === "strict" || normalized === "none") {
+    return normalized;
+  }
+
+  throw new Error(
+    "Invalid session sameSite value. Supported values: lax | strict | none"
+  );
+}
+
 export function resolveJWTSecret(input?: string): string {
   const secret = input?.trim() || readEnv(["AUTH_JWT_SECRET", "JWT_SECRET"]);
   if (!secret) {
     throw new Error("Missing JWT secret. Set AUTH_JWT_SECRET or JWT_SECRET.");
   }
   return secret;
+}
+
+export function resolveSessionConfig(): SessionConfig {
+  const cookieName =
+    readEnv(["AUTH_SESSION_COOKIE_NAME", "SESSION_COOKIE_NAME"]) ??
+    "alesha_session";
+
+  const ttlRaw = readEnv(["AUTH_SESSION_TTL_SECONDS", "SESSION_TTL_SECONDS"]);
+  const secureRaw = readEnv(["AUTH_SESSION_SECURE", "SESSION_SECURE"]);
+  const sameSiteRaw = readEnv(["AUTH_SESSION_SAME_SITE", "SESSION_SAME_SITE"]);
+
+  return {
+    cookieName,
+    ttlSeconds: ttlRaw ? parsePositiveInteger(ttlRaw, "session ttlSeconds") : 604800,
+    secure: secureRaw ? parseBoolean(secureRaw, "session secure") : false,
+    sameSite: sameSiteRaw ? parseSessionSameSite(sameSiteRaw) : "lax",
+  };
 }
 
 function resolveOAuthProviderConfig(provider: "google" | "github"): OAuthProviderConfig | undefined {
