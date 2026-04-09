@@ -19,6 +19,10 @@ vi.mock("./context", () => ({
   AuthProvider: ({ children }: { children: unknown }) => children,
 }));
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 const mockUser: PublicUser = {
   id: "u-1",
   email: "user@example.com",
@@ -83,9 +87,14 @@ function setupFetch() {
 
 const originalFetch = globalThis.fetch;
 
+type ViWithResetModules = typeof vi & { resetModules?: () => void };
+const viWithResetModules = vi as ViWithResetModules;
+
 afterEach(() => {
   Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
   vi.restoreAllMocks();
+  // Prevent module-mock leakage to other test files in combined CI runs.
+  viWithResetModules.resetModules?.();
 });
 
 describe("useLogin", () => {
