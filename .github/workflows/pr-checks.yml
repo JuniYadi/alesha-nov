@@ -128,6 +128,46 @@ jobs:
 
           echo "Affected packages: config=$config email=$email auth=$auth auth_web=$auth_web auth_react=$auth_react"
 
+      - name: Enforce changeset policy
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.sha }}"
+
+          # Check if any packages/* code changed but no .changeset/*.md exists in diff
+          has_package_changes=false
+          has_changeset=false
+
+          while IFS= read -r file; do
+            case "$file" in
+              packages/*)
+                # Exclude package.json from this check since we handle that separately
+                if [[ "$file" != packages/*/package.json ]]; then
+                  has_package_changes=true
+                fi
+                ;;
+              .changeset/*.md) has_changeset=true ;;
+            esac
+          done < <(git diff --name-only "$base_sha" "$head_sha")
+
+          if [[ "$has_package_changes" == "true" && "$has_changeset" == "false" ]]; then
+            echo "ERROR: Package code changed but no .changeset/*.md file found in PR!"
+            exit 1
+          fi
+
+          # Check if any packages/*/package.json was manually edited
+          while IFS= read -r file; do
+            if [[ "$file" == packages/*/package.json ]]; then
+              echo "ERROR: Manual edit to $file detected. Package versions should only be changed via changesets!"
+              exit 1
+            fi
+          done < <(git diff --name-only "$base_sha" "$head_sha")
+
+          echo "✅ Changeset policy passed."
+
       - name: Lint @alesha-nov/config
         if: steps.affected.outputs.config == 'true'
         run: bun run --filter @alesha-nov/config lint
