@@ -102,6 +102,8 @@ async function sendWelcomeEmail(to: string, name: string) {
 
 ## Auth Template Renderer (Magic Link / Verify Email / Reset Password)
 
+Used directly, or indirectly by `@alesha-nov/auth` auto-delivery mode when `createAuthService(..., { email })` is configured.
+
 ```ts
 import { renderAuthTemplate } from "@alesha-nov/email";
 

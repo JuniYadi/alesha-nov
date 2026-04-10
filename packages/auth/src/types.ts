@@ -1,3 +1,5 @@
+import type { EmailProvider } from "@alesha-nov/email";
+
 export interface SignupInput {
   email: string;
   password: string;
@@ -159,11 +161,43 @@ export interface AuthSessionStrategy {
   refreshSession(refreshToken: string): Promise<AuthSession | null>;
 }
 
+export type AuthEmailFlow = "magic-link" | "password-reset" | "email-verification";
+
+export interface AuthEmailDeliveryContext {
+  flow: AuthEmailFlow;
+  email: string;
+  token: string;
+  ttlSeconds: number;
+  expiresAt: string;
+}
+
+export interface AuthEmailDeliveryTemplate {
+  subject: string;
+  html?: string;
+  text?: string;
+}
+
+export interface AuthEmailFlowDeliveryOptions {
+  enabled?: boolean;
+  from?: string;
+  render?: (context: AuthEmailDeliveryContext) => AuthEmailDeliveryTemplate;
+  to?: (context: AuthEmailDeliveryContext) => string | string[];
+}
+
+export interface AuthEmailOptions {
+  provider: EmailProvider;
+  from: string;
+  magicLink?: AuthEmailFlowDeliveryOptions;
+  passwordReset?: AuthEmailFlowDeliveryOptions;
+  emailVerification?: AuthEmailFlowDeliveryOptions;
+}
+
 export interface AuthServiceOptions {
   passwordPolicyValidator?: PasswordPolicyValidator;
   auditSink?: AuthAuditSink;
   loginProtection?: LoginProtectionConfig;
   sessionStrategy?: AuthSessionStrategy;
+  email?: AuthEmailOptions;
 }
 
 export interface OAuthAuthorizationProviderConfig {

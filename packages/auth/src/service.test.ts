@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
+import type { EmailMessage } from "@alesha-nov/email";
 import { hashPassword } from "./utils";
 
 const sqlCalls: Array<{ text: string; values: unknown[] }> = [];
@@ -59,6 +60,58 @@ describe("createAuthService", () => {
     const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
 
     await expect(svc.issueMagicLinkToken({ email: "missing@example.com" })).rejects.toThrow("User not found");
+  });
+
+  test("issueMagicLinkToken auto-delivers email when provider is configured", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const sentMessages: EmailMessage[] = [];
+    const svc = await createAuthService(
+      { type: "sqlite", url: ":memory:" },
+      {
+        email: {
+          from: "noreply@example.com",
+          provider: {
+            send: async (message) => {
+              sentMessages.push(message);
+              return { id: "msg-1" };
+            },
+          },
+        },
+      }
+    );
+
+    await svc.issueMagicLinkToken({ email: "User@Example.com", ttlSeconds: 120 });
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]?.to).toBe("user@example.com");
+    expect(sentMessages[0]?.from).toBe("noreply@example.com");
+    expect(sentMessages[0]?.subject).toBe("Your Magic Link");
+  });
+
+  test("issueMagicLinkToken skips auto-delivery when flow is disabled", async () => {
+    queue.push([{ id: "u-1" }], []);
+    let sends = 0;
+    const svc = await createAuthService(
+      { type: "sqlite", url: ":memory:" },
+      {
+        email: {
+          from: "noreply@example.com",
+          provider: {
+            send: async () => {
+              sends += 1;
+              return { id: "msg-1" };
+            },
+          },
+          magicLink: {
+            enabled: false,
+          },
+        },
+      }
+    );
+
+    await svc.issueMagicLinkToken({ email: "user@example.com" });
+
+    expect(sends).toBe(0);
   });
 
   test("verifyMagicLinkToken returns null when token has been used", async () => {
@@ -141,6 +194,41 @@ describe("createAuthService", () => {
     expect(insertCall?.values).toContain("u-1");
   });
 
+  test("issuePasswordResetToken auto-delivers email with custom renderer", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const sentMessages: EmailMessage[] = [];
+    const svc = await createAuthService(
+      { type: "sqlite", url: ":memory:" },
+      {
+        email: {
+          from: "noreply@example.com",
+          provider: {
+            send: async (message) => {
+              sentMessages.push(message);
+              return { id: "msg-2" };
+            },
+          },
+          passwordReset: {
+            to: (context) => `alerts+${context.email}`,
+            from: "security@example.com",
+            render: (context) => ({
+              subject: "Reset credentials",
+              html: `<p>${context.flow}:${context.token}</p>`,
+              text: `${context.flow}:${context.token}`,
+            }),
+          },
+        },
+      }
+    );
+
+    await svc.issuePasswordResetToken({ email: "user@example.com", ttlSeconds: 300 });
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]?.to).toBe("alerts+user@example.com");
+    expect(sentMessages[0]?.from).toBe("security@example.com");
+    expect(sentMessages[0]?.subject).toBe("Reset credentials");
+  });
+
   test("issueEmailVerificationToken throws when user does not exist", async () => {
     queue.push([]);
     const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
@@ -158,6 +246,34 @@ describe("createAuthService", () => {
     const insertCall = sqlCalls.find((c) => c.text.includes("INSERT INTO auth_email_verification_tokens"));
     expect(insertCall).toBeDefined();
     expect(insertCall?.values).toContain("u-1");
+  });
+
+  test("issueEmailVerificationToken auto-delivers email and allows custom recipient", async () => {
+    queue.push([{ id: "u-1" }], []);
+    const sentMessages: EmailMessage[] = [];
+    const svc = await createAuthService(
+      { type: "sqlite", url: ":memory:" },
+      {
+        email: {
+          from: "noreply@example.com",
+          provider: {
+            send: async (message) => {
+              sentMessages.push(message);
+              return { id: "msg-3" };
+            },
+          },
+          emailVerification: {
+            to: () => ["user@example.com", "audit@example.com"],
+          },
+        },
+      }
+    );
+
+    await svc.issueEmailVerificationToken({ email: "user@example.com", ttlSeconds: 90 });
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]?.to).toEqual(["user@example.com", "audit@example.com"]);
+    expect(sentMessages[0]?.subject).toBe("Verify Your Email");
   });
 
   test("verifyEmailVerificationToken returns null when token not found", async () => {
