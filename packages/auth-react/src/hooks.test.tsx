@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach, vi, type Mock } from "bun:test";
+import { describe, expect, test, beforeEach, afterEach, vi } from "bun:test";
 import { act, renderHook, cleanup, waitFor } from "@testing-library/react";
 import {
   useLogin,
@@ -11,11 +11,12 @@ import {
   useOAuthLogin,
   useAuthGuard,
 } from "./hooks";
-import { useAuth } from "./context";
-import type { PublicUser, AuthContextValue } from "./types";
+import type { PublicUser } from "./types";
+
+const useAuthMock = vi.fn();
 
 vi.mock("./context", () => ({
-  useAuth: vi.fn(),
+  useAuth: useAuthMock,
   AuthProvider: ({ children }: { children: unknown }) => children,
 }));
 
@@ -87,14 +88,9 @@ function setupFetch() {
 
 const originalFetch = globalThis.fetch;
 
-type ViWithResetModules = typeof vi & { resetModules?: () => void };
-const viWithResetModules = vi as ViWithResetModules;
-
 afterEach(() => {
   Object.defineProperty(globalThis, "fetch", { value: originalFetch, writable: true, configurable: true });
   vi.restoreAllMocks();
-  // Prevent module-mock leakage to other test files in combined CI runs.
-  viWithResetModules.resetModules?.();
 });
 
 describe("useLogin", () => {
@@ -103,7 +99,7 @@ describe("useLogin", () => {
 
   beforeEach(() => {
     fetchMock = setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -196,7 +192,7 @@ describe("useSignup", () => {
 
   beforeEach(() => {
     fetchMock = setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -263,7 +259,7 @@ describe("useLogout", () => {
 
   beforeEach(() => {
     fetchMock = setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "authenticated",
       user: mockUser,
       session: { userId: "u-1", email: "user@example.com", roles: ["admin"], exp: 9999999999 },
@@ -323,7 +319,7 @@ describe("useLogout", () => {
 describe("usePasswordResetRequest", () => {
   beforeEach(() => {
     setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -377,7 +373,7 @@ describe("usePasswordResetRequest", () => {
 describe("useResetPassword", () => {
   beforeEach(() => {
     setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -431,7 +427,7 @@ describe("useResetPassword", () => {
 describe("useMagicLinkRequest", () => {
   beforeEach(() => {
     setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -489,7 +485,7 @@ describe("useMagicLinkVerify", () => {
 
   beforeEach(() => {
     setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -545,7 +541,7 @@ describe("useMagicLinkVerify", () => {
 describe("useOAuthLogin", () => {
   beforeEach(() => {
     setupFetch();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -608,7 +604,7 @@ describe("useAuthGuard", () => {
 
   test("uses navigation adapter push for unauthenticated redirects", async () => {
     const push = vi.fn();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -624,7 +620,7 @@ describe("useAuthGuard", () => {
 
   test("uses navigation adapter replace when requested", async () => {
     const replace = vi.fn();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -639,7 +635,7 @@ describe("useAuthGuard", () => {
   });
 
   test("falls back to window.location.assign when no adapter provided", async () => {
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -659,7 +655,7 @@ describe("useAuthGuard", () => {
 
   test("uses adapter replace as fallback when push is missing", async () => {
     const replace = vi.fn();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -675,7 +671,7 @@ describe("useAuthGuard", () => {
 
   test("prefers adapter push when replace flag is true but replace fn is missing", async () => {
     const push = vi.fn();
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -691,7 +687,7 @@ describe("useAuthGuard", () => {
 
   test("uses custom baseUrl for oauth redirect", () => {
     const assignSpy = vi.spyOn(window.location, "assign").mockImplementation(() => undefined);
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "unauthenticated",
       user: null,
       session: null,
@@ -709,7 +705,7 @@ describe("useAuthGuard", () => {
   });
 
   test("returns loading/authenticated flags from context status", () => {
-    (useAuth as Mock<() => AuthContextValue>).mockReturnValue({
+    useAuthMock.mockReturnValue({
       status: "authenticated",
       user: mockUser,
       session: { userId: "u-1", email: "user@example.com", roles: ["admin"], exp: 9999999999 },
