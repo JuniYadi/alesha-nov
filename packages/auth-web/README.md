@@ -9,36 +9,32 @@ HTTP auth layer built on top of `@alesha-nov/auth` with cookie session handling 
 - Routes for:
   - signup/login/logout
   - session + me
+  - sessions revoke + revoke-all
   - magic-link request/verify
+  - password-reset request/reset
+  - email-verification request/verify
   - OAuth login/link (`google`/`github`)
+  - OAuth authorize + callback endpoints
   - linked accounts
   - roles update
 - Adapters:
   - `@alesha-nov/auth-web/next`
   - `@alesha-nov/auth-web/tanstack`
+- Configurable CORS support
+- Built-in/custom rate limiter support for public auth endpoints
 
 ## Required for Target Auth (Email/Password, Magic Link, Google/GitHub)
 
 - Serve auth APIs consumed by frontend packages
 - Set/clear secure cookie session
 - Bridge OAuth identity data to auth service
+- Expose endpoint contracts usable by SSR/API frameworks
 
-## Missing / On-going (Track Here)
+## Remaining / Follow-up
 
-- [ ] OAuth redirect/callback flow endpoints (authorize + callback) — [#11](https://github.com/JuniYadi/alesha-nov/issues/11)
-- [ ] Email verification endpoints — [#34](https://github.com/JuniYadi/alesha-nov/issues/34)
-- [ ] CORS configuration options — [#35](https://github.com/JuniYadi/alesha-nov/issues/35)
-- [ ] Rate limiting for public auth endpoints — [#36](https://github.com/JuniYadi/alesha-nov/issues/36)
-- [ ] Session invalidation/revocation strategy beyond cookie clear — [#37](https://github.com/JuniYadi/alesha-nov/issues/37)
-
-## Already Implemented (was previously tracked as missing)
-
-- [x] Forgot/reset password API endpoints (`/password-reset/request`, `/password-reset/reset`)
+- Document production-grade OAuth provider exchange wiring examples
+- Improve persistence strategy for session revocation store if multi-instance deployment is required
 
 ## Tracking Issues
 
-- [#11](https://github.com/JuniYadi/alesha-nov/issues/11) Add OAuth authorize + callback endpoints (@alesha-nov/auth-web)
-- [#34](https://github.com/JuniYadi/alesha-nov/issues/34) Add email verification + resend endpoints (@alesha-nov/auth-web)
-- [#35](https://github.com/JuniYadi/alesha-nov/issues/35) Add configurable CORS policy support (@alesha-nov/auth-web)
-- [#36](https://github.com/JuniYadi/alesha-nov/issues/36) Add rate limiting for public auth endpoints (@alesha-nov/auth-web)
-- [#37](https://github.com/JuniYadi/alesha-nov/issues/37) Add server-side session revocation mechanism (@alesha-nov/auth-web)
+Create/update issues for newly discovered gaps. Historical issues #11/#34/#35/#36/#37 are closed.

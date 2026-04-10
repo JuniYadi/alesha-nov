@@ -2,52 +2,17 @@
 
 [![codecov](https://codecov.io/gh/JuniYadi/alesha-nov/graph/badge.svg?token=x0kbSnh7Ku)](https://codecov.io/gh/JuniYadi/alesha-nov)
 
-Bun workspace monorepo for:
+Bun workspace monorepo for auth-focused packages and a TanStack Start SSR demo app.
 
-- `@alesha-nov/config` — DB config + Bun SQL helpers + migration runner
-- `@alesha-nov/auth` — email/password auth + magic link auth + OAuth core
-- `@alesha-nov/email` — AWS SES and SMTP email providers
-- `@alesha-nov/auth-web` — HTTP auth route handlers + adapters for TanStack Start and Next.js
-- `@alesha-nov/auth-react` — React provider/hooks/guard for auth-web endpoints
+## Workspace layout
 
-## Target Product Auth Capabilities
+- `apps/web` — TanStack Start SSR app demonstrating auth flows
+- `packages/config` — DB + auth/email config resolvers, migration primitives
+- `packages/auth` — auth core service (email/password, magic link, OAuth, roles)
+- `packages/auth-web` — HTTP auth routes + TanStack/Next adapters
+- `packages/auth-react` — React provider/hooks/guard for auth-web endpoints
+- `packages/email` — SES/SMTP providers + templates/retry/rate-limit/status helpers
 
-Target state:
-- Login by email + password
-- Login by magic link (email)
-- Login by Google / GitHub
-
-Current readiness summary (verified from code):
-- Core primitives: **available** (`auth`, `auth-web`, `auth-react`)
-- Password reset flow: **available** in `auth`, `auth-web`, and `auth-react`
-- Integration hardening still **on-going**:
-  - OAuth redirect/callback flow (`auth-web`) — [#11](https://github.com/JuniYadi/alesha-nov/issues/11)
-  - OAuth client hooks (`auth-react`) — [#12](https://github.com/JuniYadi/alesha-nov/issues/12)
-  - Rate limiting / lockout (`auth`, `auth-web`) — [#24](https://github.com/JuniYadi/alesha-nov/issues/24), [#36](https://github.com/JuniYadi/alesha-nov/issues/36)
-  - Session refresh strategy (`auth-react`) — [#39](https://github.com/JuniYadi/alesha-nov/issues/39)
-
-## Package-Level Tracking
-
-Per-package tracking lives in:
-
-- `packages/config/README.md`
-- `packages/auth/README.md`
-- `packages/email/README.md`
-- `packages/auth-web/README.md`
-- `packages/auth-react/README.md`
-
-Docs mirror and consolidated matrix:
-- `docs/packages/`
-- `docs/packages/README.md`
-
-Open tracking issues (current):
-- config: [#21](https://github.com/JuniYadi/alesha-nov/issues/21), [#22](https://github.com/JuniYadi/alesha-nov/issues/22)
-- auth: [#23](https://github.com/JuniYadi/alesha-nov/issues/23), [#24](https://github.com/JuniYadi/alesha-nov/issues/24), [#25](https://github.com/JuniYadi/alesha-nov/issues/25), [#26](https://github.com/JuniYadi/alesha-nov/issues/26), [#27](https://github.com/JuniYadi/alesha-nov/issues/27)
-- email: [#28](https://github.com/JuniYadi/alesha-nov/issues/28), [#29](https://github.com/JuniYadi/alesha-nov/issues/29), [#30](https://github.com/JuniYadi/alesha-nov/issues/30), [#31](https://github.com/JuniYadi/alesha-nov/issues/31), [#32](https://github.com/JuniYadi/alesha-nov/issues/32), [#33](https://github.com/JuniYadi/alesha-nov/issues/33)
-- auth-web: [#11](https://github.com/JuniYadi/alesha-nov/issues/11), [#34](https://github.com/JuniYadi/alesha-nov/issues/34), [#35](https://github.com/JuniYadi/alesha-nov/issues/35), [#36](https://github.com/JuniYadi/alesha-nov/issues/36), [#37](https://github.com/JuniYadi/alesha-nov/issues/37)
-- auth-react: [#12](https://github.com/JuniYadi/alesha-nov/issues/12), [#38](https://github.com/JuniYadi/alesha-nov/issues/38), [#39](https://github.com/JuniYadi/alesha-nov/issues/39), [#40](https://github.com/JuniYadi/alesha-nov/issues/40)
-
-> Note: Issues #41 and #42 were created by delegated audit outside requested scope and then closed as not planned.
 ## Quick start
 
 ```bash
@@ -57,5 +22,72 @@ bun run build
 bun run typecheck
 bun run lint
 bun run test
-bun run test:coverage
 ```
+
+## TanStack SSR/API/auth wiring (current)
+
+Implemented in `apps/web`:
+
+- SSR app via `@tanstack/react-start` (`vite.config.ts` uses TanStack Start plugin)
+- Auth API route passthrough at `src/routes/auth/$.ts` to `getAuthHandler()`
+- Auth handler in `src/server/auth.ts` using `@alesha-nov/auth-web/tanstack`
+- Client auth provider in `src/routes/__root.tsx` using `AuthProvider`
+- Demo auth pages (`/signup`, `/login`) and protected page (`/dashboard`)
+
+Production hardening still recommended:
+
+- Add route-level SSR guards/loaders for protected pages (not client guard only)
+- Enforce strong `SESSION_SECRET` and production-safe cookie config
+- Add deployment pipeline (GitHub Actions + GHCR)
+
+## Package status snapshot
+
+Each package README tracks details. Highlights:
+
+- `auth`: core + security hardening pieces implemented
+- `auth-web`: OAuth authorize/callback, email verification, CORS, rate limiting, session revoke endpoints implemented
+- `auth-react`: OAuth login + magic-link hooks + session refresh + navigation adapter implemented
+- `config`: session/magic-link/email transport/OAuth env resolvers implemented
+- `email`: templates, retry/backoff, delivery status mapping, rate limiting, OTP/token helpers implemented
+
+## Docker deployment (first baseline)
+
+A root `Dockerfile` is provided for running `apps/web` SSR server.
+
+### Build image
+
+```bash
+docker build -t alesha-web:local .
+```
+
+### Run image
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DB_TYPE=sqlite \
+  -e DATABASE_URL=':memory:' \
+  -e SESSION_SECRET='replace-with-strong-secret' \
+  alesha-web:local
+```
+
+Then open: `http://localhost:3000`
+
+### Required runtime env (minimum)
+
+- `DB_TYPE` (`mysql|postgresql|sqlite`)
+- `DATABASE_URL`
+- `SESSION_SECRET`
+
+For production, also set secure cookie/session and real DB/email/OAuth env values.
+
+## Release / publish
+
+Packages are released with Changesets:
+
+```bash
+bun run changeset
+# merge to main
+# release workflow publishes packages
+```
+
+Current workflows in `.github/workflows/` focus on lint/test/release. Container build/push pipeline is tracked separately.
