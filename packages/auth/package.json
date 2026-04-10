@@ -41,7 +41,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@alesha-nov/config": "workspace:*"
+    "@alesha-nov/config": "workspace:*",
+    "@alesha-nov/email": "workspace:*"
   },
   "repository": {
     "type": "git",

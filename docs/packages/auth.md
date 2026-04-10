@@ -149,6 +149,53 @@ const user = await authService.verifyMagicLinkToken(token);
 // → AuthUser | null
 ```
 
+## Optional: Auto email delivery during token issuance
+
+`createAuthService` now supports optional email delivery for:
+- `issueMagicLinkToken`
+- `issuePasswordResetToken`
+- `issueEmailVerificationToken`
+
+When `options.email` is configured, the service will auto-send using `@alesha-nov/email` after token persistence succeeds.
+
+```ts
+import { createAuthService } from "@alesha-nov/auth";
+import { createSesProvider } from "@alesha-nov/email";
+
+const authService = await createAuthService(dbConfig, {
+  email: {
+    from: "noreply@example.com",
+    provider: createSesProvider({
+      region: "us-east-1",
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+    }),
+
+    // optional per-flow overrides
+    magicLink: {
+      // enabled defaults to true when email provider exists
+      enabled: true,
+      render: ({ token, ttlSeconds }) => ({
+        subject: "Your sign-in link",
+        html: `<p>Use this link: <a href="${token}">Sign in</a></p>`,
+        text: `Use this link to sign in: ${token} (expires in ${ttlSeconds}s)`,
+      }),
+    },
+    passwordReset: {
+      to: ({ email }) => `security+${email}`,
+    },
+    emailVerification: {
+      enabled: false, // opt out for a specific flow
+    },
+  },
+});
+```
+
+### Behavior notes
+- If `options.email` is omitted, behavior is unchanged: token methods return raw tokens only.
+- If `options.email` is provided and a flow is not disabled, default templates are used from `@alesha-nov/email` (`magic-link`, `reset-password`, `verify-email`).
+- `render` and `to` let apps fully customize payloads/recipients per flow.
+
 ## Example: OAuth Login
 
 ```ts

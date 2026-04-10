@@ -4,6 +4,9 @@ import { authMigrations } from "./migrations";
 import type {
   AuthAuditEvent,
   AuthAuditSink,
+  AuthEmailDeliveryContext,
+  AuthEmailFlow,
+  AuthEmailFlowDeliveryOptions,
   AuthService,
   AuthServiceOptions,
   AuthSession,
@@ -134,6 +137,71 @@ function createOAuthState(): string {
 async function emitAuditEvent(auditSink: AuthAuditSink | undefined, event: AuthAuditEvent): Promise<void> {
   if (!auditSink) return;
   await auditSink.emit(event);
+}
+
+function buildDefaultAuthEmail(flow: AuthEmailFlow, context: AuthEmailDeliveryContext): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const expiresInMinutes = Math.max(1, Math.ceil(context.ttlSeconds / 60));
+
+  if (flow === "magic-link") {
+    const subject = "Your Magic Link";
+    const html = `<p>Hi,</p><p>Click <a href="${context.token}">here</a> to sign in. This link expires in ${expiresInMinutes} minutes.</p>`;
+    const text = `Hi,\n\nVisit this link to sign in: ${context.token}\nExpires in ${expiresInMinutes} minutes.`;
+    return { subject, html, text };
+  }
+
+  if (flow === "password-reset") {
+    const subject = "Reset Your Password";
+    const html = `<p>Hi,</p><p>Your password reset code is: <strong>${context.token}</strong>. It expires in ${expiresInMinutes} minutes.</p>`;
+    const text = `Hi,\n\nPassword reset code: ${context.token}\nExpires in ${expiresInMinutes} minutes.`;
+    return { subject, html, text };
+  }
+
+  const subject = "Verify Your Email";
+  const html = `<p>Hi,</p><p>Your verification code is: <strong>${context.token}</strong>. It expires in ${expiresInMinutes} minutes.</p>`;
+  const text = `Hi,\n\nYour verification code: ${context.token}\nExpires in ${expiresInMinutes} minutes.`;
+  return { subject, html, text };
+}
+
+function resolveFlowOptions(options: AuthServiceOptions, flow: AuthEmailFlow): AuthEmailFlowDeliveryOptions | undefined {
+  const emailOptions = options.email;
+  if (!emailOptions) return undefined;
+
+  switch (flow) {
+    case "magic-link":
+      return emailOptions.magicLink;
+    case "password-reset":
+      return emailOptions.passwordReset;
+    case "email-verification":
+      return emailOptions.emailVerification;
+  }
+}
+
+async function maybeDeliverAuthTokenEmail(
+  options: AuthServiceOptions,
+  flow: AuthEmailFlow,
+  context: AuthEmailDeliveryContext
+): Promise<void> {
+  const emailOptions = options.email;
+  if (!emailOptions) return;
+
+  const flowOptions = resolveFlowOptions(options, flow);
+  if (flowOptions?.enabled === false) return;
+
+  const rendered = flowOptions?.render?.(context) ?? buildDefaultAuthEmail(flow, context);
+  const to = flowOptions?.to?.(context) ?? context.email;
+  const from = flowOptions?.from ?? emailOptions.from;
+
+  await emailOptions.provider.send({
+    from,
+    to,
+    subject: rendered.subject,
+    html: rendered.html,
+    text: rendered.text,
+  });
 }
 
 function pruneAttempts(attemptState: LoginAttemptState, windowSeconds: number): void {
@@ -382,8 +450,9 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
     },
 
     async issueMagicLinkToken(input: MagicLinkInput) {
+      const email = normalizeEmail(input.email);
       const rows = await client.sql`
-        SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
+        SELECT id FROM auth_users WHERE email = ${email} LIMIT 1
       `;
       const user = rows[0] as { id: string } | undefined;
       if (!user) throw new Error("User not found");
@@ -397,6 +466,14 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
         INSERT INTO auth_magic_link_tokens (token_hash, user_id, expires_at)
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
+
+      await maybeDeliverAuthTokenEmail(options, "magic-link", {
+        flow: "magic-link",
+        email,
+        token: rawToken,
+        ttlSeconds,
+        expiresAt,
+      });
 
       return rawToken;
     },
@@ -454,8 +531,9 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
     },
 
     async issuePasswordResetToken(input: PasswordResetInput) {
+      const email = normalizeEmail(input.email);
       const rows = await client.sql`
-        SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
+        SELECT id FROM auth_users WHERE email = ${email} LIMIT 1
       `;
       const user = rows[0] as { id: string } | undefined;
       if (!user) throw new Error("User not found");
@@ -469,6 +547,14 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
         INSERT INTO auth_password_reset_tokens (token_hash, user_id, expires_at)
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
+
+      await maybeDeliverAuthTokenEmail(options, "password-reset", {
+        flow: "password-reset",
+        email,
+        token: rawToken,
+        ttlSeconds,
+        expiresAt,
+      });
 
       return rawToken;
     },
@@ -537,8 +623,9 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
     },
 
     async issueEmailVerificationToken(input: EmailVerificationInput) {
+      const email = normalizeEmail(input.email);
       const rows = await client.sql`
-        SELECT id FROM auth_users WHERE email = ${normalizeEmail(input.email)} LIMIT 1
+        SELECT id FROM auth_users WHERE email = ${email} LIMIT 1
       `;
       const user = rows[0] as { id: string } | undefined;
       if (!user) throw new Error("User not found");
@@ -552,6 +639,14 @@ export async function createAuthService(dbConfig: DBConfig, options: AuthService
         INSERT INTO auth_email_verification_tokens (token_hash, user_id, expires_at)
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
+
+      await maybeDeliverAuthTokenEmail(options, "email-verification", {
+        flow: "email-verification",
+        email,
+        token: rawToken,
+        ttlSeconds,
+        expiresAt,
+      });
 
       return rawToken;
     },
