@@ -35,8 +35,7 @@ jobs:
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          # Trusted Publishing — no long-lived token needed
-          token: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          # No token secret needed — id-token: write triggers OIDC Trusted Publishing
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -53,5 +52,4 @@ jobs:
           commit: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # NPM_PUBLISH_TOKEN used by setup-node for OIDC exchange
-          # Remove NPM_TOKEN once Trusted Publishing is confirmed working
+          # No NPM_TOKEN needed — setup-node handles OIDC Trusted Publishing
