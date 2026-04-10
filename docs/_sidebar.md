@@ -1,4 +1,6 @@
 - [Home](/)
+- [Apps](apps/)
+  - [Example App — TanStack Start](apps/example)
 - [Packages](packages/)
   - [@alesha-nov/config](packages/config)
   - [@alesha-nov/auth](packages/auth)
