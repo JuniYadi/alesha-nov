@@ -210,22 +210,53 @@ jobs:
           if [[ "${{ needs.lint.outputs.auth_web }}" == "true" ]]; then
             targets+=("packages/auth-web/src")
           fi
-          if [[ "${{ needs.lint.outputs.auth_react }}" == "true" ]]; then
-            targets+=("packages/auth-react/src")
+
+          run_auth_react="${{ needs.lint.outputs.auth_react }}"
+
+          mkdir -p test-results coverage
+
+          echo "Coverage targets (root run): ${targets[*]}"
+          echo "Auth React in this PR: ${run_auth_react}"
+
+          if [[ ${#targets[@]} -gt 0 ]]; then
+            bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml "${targets[@]}"
           fi
 
-          extra_args=()
-          if [[ "${{ needs.lint.outputs.auth_react }}" == "true" ]]; then
-            # Root-level bun test with path targets does not automatically apply package-local bunfig preload.
-            # Ensure JSDOM globals are available for auth-react tests.
-            extra_args+=("--preload" "./packages/auth-react/src/test-setup.ts")
+          if [[ "${run_auth_react}" == "true" ]]; then
+            # Run auth-react in package scope to avoid root-run module mock leakage.
+            # hooks.test.tsx mocks ./context at module scope; keep it in a separate Bun process
+            # so it cannot contaminate AuthProvider/AuthGuard/context tests.
+            pushd packages/auth-react >/dev/null
+
+            bun test \
+              --coverage \
+              --coverage-reporter=lcov \
+              --coverage-dir ./coverage/non-hooks \
+              --preload ./src/test-setup.ts \
+              --max-concurrency 1 \
+              src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx
+
+            bun test \
+              --coverage \
+              --coverage-reporter=lcov \
+              --coverage-dir ./coverage/hooks \
+              --preload ./src/test-setup.ts \
+              --max-concurrency 1 \
+              src/hooks.test.tsx
+
+            mkdir -p coverage
+            cat ./coverage/non-hooks/lcov.info ./coverage/hooks/lcov.info > ./coverage/lcov.info
+            popd >/dev/null
+
+            # Merge auth-react coverage into root lcov for Codecov upload.
+            if [[ -f packages/auth-react/coverage/lcov.info ]]; then
+              if [[ -f coverage/lcov.info ]]; then
+                cat packages/auth-react/coverage/lcov.info >> coverage/lcov.info
+              else
+                cp packages/auth-react/coverage/lcov.info coverage/lcov.info
+              fi
+            fi
           fi
-
-          mkdir -p test-results
-
-          echo "Coverage targets: ${targets[*]}"
-          echo "Extra args: ${extra_args[*]}"
-          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml "${extra_args[@]}" "${targets[@]}"
 
       - name: Upload test results to Codecov (Test Analytics)
         if: needs.lint.outputs.any_changed == 'true' && hashFiles('test-results/junit.xml') != ''
