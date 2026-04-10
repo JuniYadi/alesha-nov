@@ -6,3 +6,9 @@ node_modules/
 *.log
 dist/
 **/dist/
+coverage/
+**/coverage/
+test-results/
+**/test-results/
+.tmp_pr_body_*.md
+worktrees/

@@ -17,6 +17,7 @@ jobs:
       auth: ${{ steps.affected.outputs.auth }}
       auth_web: ${{ steps.affected.outputs.auth_web }}
       auth_react: ${{ steps.affected.outputs.auth_react }}
+      web: ${{ steps.affected.outputs.web }}
 
     steps:
       - name: Checkout
@@ -43,6 +44,7 @@ jobs:
           auth=false
           auth_web=false
           auth_react=false
+          web=false
           all=false
 
           if [[ "${{ github.event_name }}" != "pull_request" ]]; then
@@ -60,6 +62,7 @@ jobs:
                 packages/auth/*) auth=true ;;
                 packages/auth-web/*) auth_web=true ;;
                 packages/auth-react/*) auth_react=true ;;
+                apps/web/*) web=true ;;
                 bun.lock|package.json|tsconfig.base.json|eslint.config.*)
                   all=true
                   ;;
