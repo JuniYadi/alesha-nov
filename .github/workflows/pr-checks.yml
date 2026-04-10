@@ -219,6 +219,10 @@ jobs:
             # Root-level bun test with path targets does not automatically apply package-local bunfig preload.
             # Ensure JSDOM globals are available for auth-react tests.
             extra_args+=("--preload" "./packages/auth-react/src/test-setup.ts")
+            # auth-react hooks tests use module mocks for ./context; running mixed-package test targets
+            # concurrently can leak mocked module state into sibling auth-react files.
+            # Force single-worker execution when auth-react is included to keep test isolation deterministic.
+            extra_args+=("--max-concurrency" "1")
           fi
 
           mkdir -p test-results
