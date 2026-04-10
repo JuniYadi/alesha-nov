@@ -7,30 +7,25 @@ React client toolkit for authentication state, hooks, and route guarding.
 - `AuthProvider` to fetch `/session` + `/me`
 - `useAuth()` state hook
 - `useLogin()`, `useSignup()`, `useLogout()` mutation hooks
+- `usePasswordResetRequest()`, `useResetPassword()` hooks
+- `useMagicLinkRequest()`, `useMagicLinkVerify()` hooks
+- `useOAuthLogin()` hook for provider authorize redirect
 - `useAuthGuard()` and `AuthGuard` component
+- Session-expiry-aware refresh scheduling in provider
+- Navigation adapter support for route guards (`push`/`replace`)
 - Configurable `baseUrl` + `basePath`
 
 ## Required for Target Auth (Email/Password, Magic Link, Google/GitHub)
 
 - Consume auth-web endpoints consistently
 - Keep client auth state synchronized with cookie session
-- Provide auth guard for protected routes
+- Provide route protection UX for protected views
 
-## Missing / On-going (Track Here)
+## Remaining / Follow-up
 
-- [ ] OAuth client hooks (`useOAuthLogin`, `useOAuthLink`) — [#12](https://github.com/JuniYadi/alesha-nov/issues/12)
-- [ ] Magic link hooks (`request`, `verify`) — [#38](https://github.com/JuniYadi/alesha-nov/issues/38)
-- [ ] Session expiry proactive refresh handling — [#39](https://github.com/JuniYadi/alesha-nov/issues/39)
-- [ ] Router-agnostic redirect adapter (instead of `window.location.href` only) — [#40](https://github.com/JuniYadi/alesha-nov/issues/40)
-
-## Already Implemented (was previously tracked as missing)
-
-- [x] Forgot/reset password hooks (`usePasswordResetRequest`, `useResetPassword`)
-- [x] Dedicated package docs under `docs/packages/auth-react.md`
+- OAuth account-linking hook (`useOAuthLink`) is not exposed yet
+- Recommended: add SSR-first guard patterns in app router (outside this package)
 
 ## Tracking Issues
 
-- [#12](https://github.com/JuniYadi/alesha-nov/issues/12) Add OAuth hooks for Google/GitHub login and linking (@alesha-nov/auth-react)
-- [#38](https://github.com/JuniYadi/alesha-nov/issues/38) Add magic-link hooks request/verify (@alesha-nov/auth-react)
-- [#39](https://github.com/JuniYadi/alesha-nov/issues/39) Add session-expiry-aware auto refresh/refetch (@alesha-nov/auth-react)
-- [#40](https://github.com/JuniYadi/alesha-nov/issues/40) Add pluggable navigation adapter for route guards (@alesha-nov/auth-react)
+Create/update issues for any new gaps discovered. Historical issues #12/#38/#39/#40 are closed.
