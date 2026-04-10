@@ -223,10 +223,29 @@ jobs:
           fi
 
           if [[ "${run_auth_react}" == "true" ]]; then
-            # Run auth-react in package scope to avoid root-run module mock leakage
-            # (hooks.test.tsx mocks ./context and can contaminate sibling files in combined root runs).
+            # Run auth-react in package scope to avoid root-run module mock leakage.
+            # hooks.test.tsx mocks ./context at module scope; keep it in a separate Bun process
+            # so it cannot contaminate AuthProvider/AuthGuard/context tests.
             pushd packages/auth-react >/dev/null
-            bun test --coverage --coverage-reporter=lcov --preload ./src/test-setup.ts --max-concurrency 1
+
+            bun test \
+              --coverage \
+              --coverage-reporter=lcov \
+              --coverage-dir ./coverage/non-hooks \
+              --preload ./src/test-setup.ts \
+              --max-concurrency 1 \
+              src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx
+
+            bun test \
+              --coverage \
+              --coverage-reporter=lcov \
+              --coverage-dir ./coverage/hooks \
+              --preload ./src/test-setup.ts \
+              --max-concurrency 1 \
+              src/hooks.test.tsx
+
+            mkdir -p coverage
+            cat ./coverage/non-hooks/lcov.info ./coverage/hooks/lcov.info > ./coverage/lcov.info
             popd >/dev/null
 
             # Merge auth-react coverage into root lcov for Codecov upload.
