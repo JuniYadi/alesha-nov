@@ -1,5 +1,5 @@
 import { describe, expect, test, afterEach, vi } from "bun:test";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import { AuthGuard } from "./auth-guard";
 import { AuthProvider } from "./context";
 import type { ReactNode } from "react";
@@ -81,8 +81,14 @@ describe("AuthGuard", () => {
         <AuthGuard children={<div>secret content</div>} />
       </AuthProvider>
     );
-    await new Promise((r) => setTimeout(r, 50));
-    expect(container.textContent).toBe("");
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toBe("");
+    });
   });
 
   test("renders children when authenticated", async () => {
@@ -92,8 +98,10 @@ describe("AuthGuard", () => {
         <AuthGuard children={<div>authenticated content</div>} />
       </AuthProvider>
     );
-    await new Promise((r) => setTimeout(r, 50));
-    expect(container.textContent).toBe("authenticated content");
+
+    await waitFor(() => {
+      expect(container.textContent).toBe("authenticated content");
+    });
   });
 
   test("renders fallback over children when authenticated and fallback provided", async () => {
@@ -107,7 +115,9 @@ describe("AuthGuard", () => {
         />
       </AuthProvider>
     );
-    await new Promise((r) => setTimeout(r, 50));
-    expect(container.textContent).toBe("authenticated content");
+
+    await waitFor(() => {
+      expect(container.textContent).toBe("authenticated content");
+    });
   });
 });
