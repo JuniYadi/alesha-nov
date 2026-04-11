@@ -1,37 +1,60 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
-// Tests for apps/web/src/server/auth.ts
-// The auth handler delegates to @alesha-nov/auth-web/tanstack which is fully
-// tested in the auth-web package. Here we test the server-side wiring only.
-describe('server/auth', () => {
-  test('resolveDbType defaults to sqlite when DB_TYPE is unset', () => {
-    // Dev mode falls back to SQLite in-memory when no DATABASE_URL is set.
-    // This matches the expected behavior documented in the issue.
-    const dbType = 'sqlite'
-    expect(['mysql', 'postgresql', 'sqlite']).toContain(dbType)
+const ORIGINAL_ENV = { ...process.env }
+
+afterEach(() => {
+  process.env = { ...ORIGINAL_ENV }
+  vi.resetModules()
+})
+
+describe('server/auth env resolution', () => {
+  test('resolveSessionSecret uses env when set', async () => {
+    process.env.SESSION_SECRET = '0123456789abcdef0123456789abcdef'
+
+    const { resolveSessionSecret } = await import('./auth-config')
+    expect(resolveSessionSecret()).toBe('0123456789abcdef0123456789abcdef')
   })
 
-  test('auth handler basePath is /auth', () => {
-    // The server route mounts handler at /auth/$ so all endpoints
-    // (signup, login, session, etc.) live under /auth/*
-    const basePath = '/auth'
-    expect(basePath).toBe('/auth')
+  test('resolveSessionSecret falls back to dev secret outside production', async () => {
+    delete process.env.SESSION_SECRET
+    process.env.NODE_ENV = 'development'
+
+    const { resolveSessionSecret } = await import('./auth-config')
+    expect(resolveSessionSecret()).toBe('dev-session-secret-change-me')
   })
 
-  test('secureCookie defaults to false in development', () => {
-    // In the example app SESSION_SECRET and DB env vars are optional;
-    // secureCookie is false so cookies work on http://localhost:3000 in dev.
-    const secureCookie = false
-    expect(secureCookie).toBe(false)
+  test('resolveSessionSecret throws when missing in production', async () => {
+    delete process.env.SESSION_SECRET
+    process.env.NODE_ENV = 'production'
+
+    const { resolveSessionSecret } = await import('./auth-config')
+    expect(() => resolveSessionSecret()).toThrowError('SESSION_SECRET is required in production')
   })
 
-  test('auth handler contract — Request → Promise<Response>', async () => {
-    // The handler contract: async (request: Request) => Promise<Response>.
-    // Actual handler is built by buildHandler() from @alesha-nov/auth-web/tanstack.
-    type Handler = (req: Request) => Promise<Response>
-    const mockHandler: Handler = async () => new Response(null, { status: 404 })
-    const req = new Request('http://localhost:3000/auth/session')
-    const result = await mockHandler(req)
-    expect(result.status).toBe(404)
+  test('resolveSecureCookie defaults true in production', async () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.AUTH_SECURE_COOKIE
+
+    const { resolveSecureCookie } = await import('./auth-config')
+    expect(resolveSecureCookie()).toBe(true)
+  })
+
+  test('resolveSecureCookie defaults false in development', async () => {
+    process.env.NODE_ENV = 'development'
+    delete process.env.AUTH_SECURE_COOKIE
+
+    const { resolveSecureCookie } = await import('./auth-config')
+    expect(resolveSecureCookie()).toBe(false)
+  })
+
+  test('resolveSecureCookie allows explicit override', async () => {
+    process.env.NODE_ENV = 'production'
+    process.env.AUTH_SECURE_COOKIE = 'false'
+
+    const { resolveSecureCookie } = await import('./auth-config')
+    expect(resolveSecureCookie()).toBe(false)
+
+    process.env.AUTH_SECURE_COOKIE = '1'
+    expect(resolveSecureCookie()).toBe(true)
   })
 })
