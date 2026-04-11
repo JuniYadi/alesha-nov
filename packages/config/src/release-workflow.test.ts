@@ -15,7 +15,7 @@ describe("release workflow setup", () => {
     const configPath = join(repoRoot, ".changeset", "config.json");
     const config = (await Bun.file(configPath).json()) as ChangesetConfig;
 
-    expect(config.access).toBe("restricted");
+    expect(config.access).toBe("public");
     expect(config.updateInternalDependencies).toBe("minor");
     expect(config.commit).toBe(true);
     expect(config.baseBranch).toBe("main");
@@ -31,6 +31,28 @@ describe("release workflow setup", () => {
     expect(workflowText).toContain("uses: changesets/action@v1");
     expect(workflowText).toContain("GITHUB_TOKEN");
     expect(workflowText).toContain("NPM_TOKEN");
+  });
+
+  test("docker ghcr workflow publishes sha and main tags", async () => {
+    const workflowPath = join(repoRoot, ".github", "workflows", "docker-ghcr.yml");
+    const workflowText = await Bun.file(workflowPath).text();
+
+    expect(workflowText).toContain("name: Docker GHCR");
+    expect(workflowText).toContain("uses: docker/build-push-action@v6");
+    expect(workflowText).toContain("type=sha,format=short,prefix=sha-");
+    expect(workflowText).toContain("type=raw,value=main,enable={{is_default_branch}}");
+    expect(workflowText).toContain("cache-from: type=gha");
+    expect(workflowText).toContain("cache-to: type=gha,mode=max");
+    expect(workflowText).toContain("packages: write");
+  });
+
+  test("readme documents ghcr pull and run usage", async () => {
+    const readmePath = join(repoRoot, "README.md");
+    const readmeText = await Bun.file(readmePath).text();
+
+    expect(readmeText).toContain("Pull and run from GHCR (`main` tag)");
+    expect(readmeText).toContain("ghcr.io/<owner>/alesha-web:main");
+    expect(readmeText).toContain("ghcr.io/<owner>/alesha-web:sha-<shortsha>");
   });
 
   test("release documentation exists with key commands", async () => {
