@@ -703,7 +703,6 @@ describe("useOAuthLink", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-<<<<<<< HEAD
   test("uses fallback error message on non-error throw", async () => {
     globalThis.fetch = vi.fn(async () => {
       throw "network disconnected";
