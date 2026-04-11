@@ -35,10 +35,14 @@ Implemented in `apps/web`:
 - Client auth provider in `src/routes/__root.tsx` using `AuthProvider`
 - Demo auth pages (`/signup`, `/login`) and protected page (`/dashboard`)
 
-Production hardening still recommended:
+Production hardening implemented in `apps/web`:
 
-- Add route-level SSR guards/loaders for protected pages (not client guard only)
-- Enforce strong `SESSION_SECRET` and production-safe cookie config
+- `/dashboard` now enforces route-level SSR auth checks in `beforeLoad` (not client-guard-only)
+- `src/server/auth.ts` now fails fast if `SESSION_SECRET` is missing in production
+- Secure cookie behavior is environment-aware (`secureCookie: true` by default in production)
+
+Remaining recommended hardening:
+
 - Add deployment pipeline (GitHub Actions + GHCR)
 
 ## Package status snapshot
@@ -55,21 +59,40 @@ Each package README tracks details. Highlights:
 
 A root `Dockerfile` is provided for running `apps/web` SSR server.
 
-### Build image
+### Build image (local)
 
 ```bash
 docker build -t alesha-web:local .
 ```
 
-### Run image
+### Run image (local)
 
 ```bash
 docker run --rm -p 3000:3000 \
   -e DB_TYPE=sqlite \
   -e DATABASE_URL=':memory:' \
-  -e SESSION_SECRET='replace-with-strong-secret' \
+  -e SESSION_SECRET='replac...cret' \
   alesha-web:local
 ```
+
+Then open: `http://localhost:3000`
+
+### Pull and run from GHCR (`main` tag)
+
+The `Docker GHCR` workflow (`.github/workflows/docker-ghcr.yml`) publishes:
+
+- `ghcr.io/<owner>/alesha-web:sha-<shortsha>`
+- `ghcr.io/<owner>/alesha-web:main` (default branch)
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DB_TYPE=sqlite \
+  -e DATABASE_URL=':memory:' \
+  -e SESSION_SECRET='replac...cret' \
+  ghcr.io/<owner>/alesha-web:main
+```
+
+Replace `<owner>` with your GitHub org/user (for this repo: `juniyadi`).
 
 Then open: `http://localhost:3000`
 
@@ -79,7 +102,13 @@ Then open: `http://localhost:3000`
 - `DATABASE_URL`
 - `SESSION_SECRET`
 
-For production, also set secure cookie/session and real DB/email/OAuth env values.
+### Auth hardening env contract
+
+- In `NODE_ENV=production`, `SESSION_SECRET` is mandatory (startup fails fast if missing)
+- `secureCookie` defaults to `true` in production and `false` in non-production
+- Optional override: `AUTH_SECURE_COOKIE=true|false` (or `1|0`)
+
+For production, also set real DB/email/OAuth env values.
 
 ## Release / publish
 

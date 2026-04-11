@@ -1,7 +1,20 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { AuthGuard, useAuth, useLogout } from '@alesha-nov/auth-react'
+import { getServerSessionOrNull } from '../server/session'
 
-export const Route = createFileRoute('/dashboard')({ component: DashboardPage })
+export const Route = createFileRoute('/dashboard')({
+  beforeLoad: async ({ location }) => {
+    const session = await getServerSessionOrNull()
+
+    if (!session) {
+      throw redirect({
+        to: '/login',
+        search: { redirect: location.href },
+      })
+    }
+  },
+  component: DashboardPage,
+})
 
 function DashboardPage() {
   const { user, session } = useAuth()

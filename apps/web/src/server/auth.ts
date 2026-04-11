@@ -1,8 +1,8 @@
 import { createAuthService } from '@alesha-nov/auth'
-import { type DBType } from '@alesha-nov/config'
+import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
-
-const DEFAULT_SESSION_SECRET = 'dev-session-secret-change-me'
+import { type DBType } from '@alesha-nov/config'
+import { resolveSecureCookie, resolveSessionSecret } from './auth-config'
 
 function resolveDbType(): DBType {
   const raw = process.env.DB_TYPE?.toLowerCase()
@@ -20,8 +20,8 @@ async function buildHandler() {
   return createTanstackAuthHandler({
     authService,
     basePath: '/auth',
-    secureCookie: false,
-    sessionSecret: process.env.SESSION_SECRET ?? DEFAULT_SESSION_SECRET,
+    secureCookie: resolveSecureCookie(),
+    sessionSecret: resolveSessionSecret(),
   })
 }
 
@@ -30,4 +30,8 @@ let authHandlerPromise: Promise<ReturnType<typeof createTanstackAuthHandler>> | 
 export async function getAuthHandler() {
   authHandlerPromise ??= buildHandler()
   return authHandlerPromise
+}
+
+export async function getServerSession(request: Request): Promise<AuthSession | null> {
+  return getSessionFromRequest(request, resolveSessionSecret())
 }
