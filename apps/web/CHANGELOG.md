@@ -1,5 +1,12 @@
 # web
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [80e8513]
+  - @alesha-nov/auth-react@0.3.0
+
 ## 0.1.2
 
 ### Patch Changes
