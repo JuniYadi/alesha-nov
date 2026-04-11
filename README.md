@@ -35,10 +35,14 @@ Implemented in `apps/web`:
 - Client auth provider in `src/routes/__root.tsx` using `AuthProvider`
 - Demo auth pages (`/signup`, `/login`) and protected page (`/dashboard`)
 
-Production hardening still recommended:
+Production hardening implemented in `apps/web`:
 
-- Add route-level SSR guards/loaders for protected pages (not client guard only)
-- Enforce strong `SESSION_SECRET` and production-safe cookie config
+- `/dashboard` now enforces route-level SSR auth checks in `beforeLoad` (not client-guard-only)
+- `src/server/auth.ts` now fails fast if `SESSION_SECRET` is missing in production
+- Secure cookie behavior is environment-aware (`secureCookie: true` by default in production)
+
+Remaining recommended hardening:
+
 - Add deployment pipeline (GitHub Actions + GHCR)
 
 ## Package status snapshot
@@ -98,7 +102,13 @@ Then open: `http://localhost:3000`
 - `DATABASE_URL`
 - `SESSION_SECRET`
 
-For production, also set secure cookie/session and real DB/email/OAuth env values.
+### Auth hardening env contract
+
+- In `NODE_ENV=production`, `SESSION_SECRET` is mandatory (startup fails fast if missing)
+- `secureCookie` defaults to `true` in production and `false` in non-production
+- Optional override: `AUTH_SECURE_COOKIE=true|false` (or `1|0`)
+
+For production, also set real DB/email/OAuth env values.
 
 ## Release / publish
 
