@@ -647,6 +647,14 @@ describe("useOAuthLink", () => {
     vi.clearAllMocks();
   });
 
+  test("initial state is reset", () => {
+    const { result } = renderHookWithAuth(() => useOAuthLink());
+
+    expect(result.current.data).toBe(null);
+    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(false);
+  });
+
   test("successful link posts payload and sets data", async () => {
     const fetchSpy = globalThis.fetch as unknown as ReturnType<typeof vi.fn>;
     const { result } = renderHookWithAuth(() => useOAuthLink({ basePath: "/auth" }));
@@ -693,6 +701,44 @@ describe("useOAuthLink", () => {
     expect(result.current.error).toBe("Authentication required to link OAuth accounts");
     expect(result.current.loading).toBe(false);
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test("uses fallback error message on non-error throw", async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw "network disconnected";
+    }) as unknown as typeof fetch;
+
+    const { result } = renderHookWithAuth(() => useOAuthLink({ basePath: "/auth" }));
+
+    await act(async () => {
+      try {
+        await result.current.link("google", { providerAccountId: "google-123" });
+      } catch {
+        // expected
+      }
+    });
+
+    expect(result.current.error).toBe("OAuth link failed");
+    expect(result.current.loading).toBe(false);
+  });
+
+  test("uses baseUrl when building link endpoint", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const { result } = renderHookWithAuth(() =>
+      useOAuthLink({ baseUrl: "https://api.example.com/", basePath: "/auth" }),
+    );
+
+    await act(async () => {
+      await result.current.link("google", { providerAccountId: "google-123", providerEmail: "user@gmail.com" });
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "https://api.example.com/auth/oauth/google/link",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      }),
+    );
   });
 
   test("failed API request sets error", async () => {
