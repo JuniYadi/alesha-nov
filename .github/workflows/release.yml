@@ -37,9 +37,6 @@ jobs:
           registry-url: https://registry.npmjs.org
           # No token secret needed — id-token: write triggers OIDC exchange
 
-      - name: Update npm to latest (OIDC support)
-        run: npm install -g npm@latest
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
