@@ -133,6 +133,7 @@ jobs:
 
           popd >/dev/null
 
+          # Merge auth-react coverage into root lcov for Codecov upload.
           if [[ -f packages/auth-react/coverage/lcov.info ]]; then
             if [[ -f coverage/lcov.info ]]; then
               cat packages/auth-react/coverage/lcov.info >> coverage/lcov.info
