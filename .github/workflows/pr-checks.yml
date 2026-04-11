@@ -80,26 +80,34 @@ jobs:
 
           # Dependency propagation (both directions for CI build/test correctness):
           # Upstream deps needed for build:
-          # auth-web -> auth -> config
+          # auth-web -> auth -> (config + email)
           if [[ "$auth_web" == "true" ]]; then
             auth=true
           fi
           if [[ "$auth" == "true" ]]; then
             config=true
+            email=true
           fi
 
-          # auth-react depends on auth-web -> auth -> config
+          # auth-react depends on auth-web -> auth -> (config + email)
           if [[ "$auth_react" == "true" ]]; then
             auth_web=true
             auth=true
             config=true
+            email=true
           fi
 
           # Downstream impact for package-change fanout:
           # config impacts auth + auth-web + auth-react,
+          # email impacts auth + auth-web + auth-react,
           # auth impacts auth-web + auth-react,
           # auth-web impacts auth-react
           if [[ "$config" == "true" ]]; then
+            auth=true
+            auth_web=true
+            auth_react=true
+          fi
+          if [[ "$email" == "true" ]]; then
             auth=true
             auth_web=true
             auth_react=true
