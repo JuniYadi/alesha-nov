@@ -10,14 +10,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    outputs:
-      any_changed: ${{ steps.affected.outputs.any_changed }}
-      config: ${{ steps.affected.outputs.config }}
-      email: ${{ steps.affected.outputs.email }}
-      auth: ${{ steps.affected.outputs.auth }}
-      auth_web: ${{ steps.affected.outputs.auth_web }}
-      auth_react: ${{ steps.affected.outputs.auth_react }}
-      web: ${{ steps.affected.outputs.web }}
 
     steps:
       - name: Checkout
@@ -33,118 +25,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Detect affected packages
-        id: affected
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          config=false
-          email=false
-          auth=false
-          auth_web=false
-          auth_react=false
-          web=false
-          all=false
-
-          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            all=true
-          else
-            base_sha="${{ github.event.pull_request.base.sha }}"
-            head_sha="${{ github.sha }}"
-
-            mapfile -t changed_files < <(git diff --name-only "$base_sha" "$head_sha")
-
-            for file in "${changed_files[@]}"; do
-              case "$file" in
-                packages/config/*) config=true ;;
-                packages/email/*) email=true ;;
-                packages/auth/*) auth=true ;;
-                packages/auth-web/*) auth_web=true ;;
-                packages/auth-react/*) auth_react=true ;;
-                apps/web/*) web=true ;;
-                bun.lock|package.json|tsconfig.base.json|eslint.config.*)
-                  all=true
-                  ;;
-              esac
-            done
-          fi
-
-          if [[ "$all" == "true" ]]; then
-            config=true
-            email=true
-            auth=true
-            auth_web=true
-            auth_react=true
-            web=true
-          fi
-
-          # Dependency propagation (both directions for CI build/test correctness):
-          # Upstream deps needed for build:
-          # auth-web -> auth -> (config + email)
-          if [[ "$auth_web" == "true" ]]; then
-            auth=true
-          fi
-          if [[ "$auth" == "true" ]]; then
-            config=true
-            email=true
-          fi
-
-          # auth-react depends on auth-web -> auth -> (config + email)
-          if [[ "$auth_react" == "true" ]]; then
-            auth_web=true
-            auth=true
-            config=true
-            email=true
-          fi
-
-          # Downstream impact for package-change fanout:
-          # config impacts auth + auth-web + auth-react,
-          # email impacts auth + auth-web + auth-react,
-          # auth impacts auth-web + auth-react,
-          # auth-web impacts auth-react
-          if [[ "$config" == "true" ]]; then
-            auth=true
-            auth_web=true
-            auth_react=true
-          fi
-          if [[ "$email" == "true" ]]; then
-            auth=true
-            auth_web=true
-            auth_react=true
-          fi
-          if [[ "$auth" == "true" ]]; then
-            auth_web=true
-            auth_react=true
-          fi
-          if [[ "$auth_web" == "true" ]]; then
-            auth_react=true
-          fi
-
-          # Transitive closure guard:
-          # if any auth-family package is selected, both config and email
-          # must be selected as upstream build dependencies.
-          if [[ "$auth" == "true" || "$auth_web" == "true" || "$auth_react" == "true" ]]; then
-            config=true
-            email=true
-          fi
-
-          any_changed=false
-          if [[ "$config" == "true" || "$email" == "true" || "$auth" == "true" || "$auth_web" == "true" || "$auth_react" == "true" ]]; then
-            any_changed=true
-          fi
-
-          {
-            echo "any_changed=$any_changed"
-            echo "config=$config"
-            echo "email=$email"
-            echo "auth=$auth"
-            echo "auth_web=$auth_web"
-            echo "auth_react=$auth_react"
-          } >> "$GITHUB_OUTPUT"
-
-          echo "Affected packages: config=$config email=$email auth=$auth auth_web=$auth_web auth_react=$auth_react"
-
       - name: Enforce changeset policy
         if: github.event_name == 'pull_request'
         shell: bash
@@ -154,14 +34,12 @@ jobs:
           base_sha="${{ github.event.pull_request.base.sha }}"
           head_sha="${{ github.sha }}"
 
-          # Check if any packages/* code changed but no .changeset/*.md exists in diff
           has_package_changes=false
           has_changeset=false
 
           while IFS= read -r file; do
             case "$file" in
               packages/*)
-                # Exclude package.json from this check since we handle that separately
                 if [[ "$file" != packages/*/package.json ]]; then
                   has_package_changes=true
                 fi
@@ -175,7 +53,6 @@ jobs:
             exit 1
           fi
 
-          # Check if any packages/*/package.json was manually edited
           while IFS= read -r file; do
             if [[ "$file" == packages/*/package.json ]]; then
               echo "ERROR: Manual edit to $file detected. Package versions should only be changed via changesets!"
@@ -185,29 +62,14 @@ jobs:
 
           echo "✅ Changeset policy passed."
 
-      - name: Lint @alesha-nov/config
-        if: steps.affected.outputs.config == 'true'
-        run: bun run --filter @alesha-nov/config lint
-
-      - name: Lint @alesha-nov/email
-        if: steps.affected.outputs.email == 'true'
-        run: bun run --filter @alesha-nov/email lint
-
-      - name: Lint @alesha-nov/auth
-        if: steps.affected.outputs.auth == 'true'
-        run: bun run --filter @alesha-nov/auth lint
-
-      - name: Lint @alesha-nov/auth-web
-        if: steps.affected.outputs.auth_web == 'true'
-        run: bun run --filter @alesha-nov/auth-web lint
-
-      - name: Lint @alesha-nov/auth-react
-        if: steps.affected.outputs.auth_react == 'true'
-        run: bun run --filter @alesha-nov/auth-react lint
-
-      - name: No package changes detected
-        if: steps.affected.outputs.any_changed != 'true'
-        run: echo "No package changes detected. Skipping lint package steps."
+      - name: Lint all packages
+        run: |
+          bun run --filter @alesha-nov/config lint && \
+          bun run --filter @alesha-nov/email lint && \
+          bun run --filter @alesha-nov/auth lint && \
+          bun run --filter @alesha-nov/auth-web lint && \
+          bun run --filter @alesha-nov/auth-react lint && \
+          bun run --filter web lint
 
   test:
     needs: lint
@@ -227,101 +89,72 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: No package changes detected
-        if: needs.lint.outputs.any_changed != 'true'
-        run: echo "No package changes detected. Skipping build/test/coverage."
+      # Build upstream-first for workspace-linked DTS resolution
+      - name: Build packages
+        run: |
+          bun run --filter @alesha-nov/config build && \
+          bun run --filter @alesha-nov/email build && \
+          bun run --filter @alesha-nov/auth build && \
+          bun run --filter @alesha-nov/auth-web build && \
+          bun run --filter @alesha-nov/auth-react build && \
+          bun run --filter web build
 
-      # Build order matters for workspace-linked DTS resolution.
-      # Keep upstream-first order: config -> email -> auth -> auth-web -> auth-react
-      - name: Build @alesha-nov/config
-        if: needs.lint.outputs.config == 'true'
-        run: bun run --filter @alesha-nov/config build
-
-      - name: Build @alesha-nov/email
-        if: needs.lint.outputs.email == 'true'
-        run: bun run --filter @alesha-nov/email build
-
-      - name: Build @alesha-nov/auth
-        if: needs.lint.outputs.auth == 'true'
-        run: bun run --filter @alesha-nov/auth build
-
-      - name: Build @alesha-nov/auth-web
-        if: needs.lint.outputs.auth_web == 'true'
-        run: bun run --filter @alesha-nov/auth-web build
-
-      - name: Build @alesha-nov/auth-react
-        if: needs.lint.outputs.auth_react == 'true'
-        run: bun run --filter @alesha-nov/auth-react build
-
-      - name: Unit test + coverage (affected packages)
-        if: needs.lint.outputs.any_changed == 'true'
+      # Test config, email, auth, auth-web (can run in parallel via root bun test)
+      - name: Unit test + coverage
         shell: bash
         run: |
           set -euo pipefail
-
-          targets=()
-          if [[ "${{ needs.lint.outputs.config }}" == "true" ]]; then
-            targets+=("packages/config/src")
-          fi
-          if [[ "${{ needs.lint.outputs.email }}" == "true" ]]; then
-            targets+=("packages/email/src")
-          fi
-          if [[ "${{ needs.lint.outputs.auth }}" == "true" ]]; then
-            targets+=("packages/auth/src")
-          fi
-          if [[ "${{ needs.lint.outputs.auth_web }}" == "true" ]]; then
-            targets+=("packages/auth-web/src")
-          fi
-
-          run_auth_react="${{ needs.lint.outputs.auth_react }}"
-
           mkdir -p test-results coverage
 
-          echo "Coverage targets (root run): ${targets[*]}"
-          echo "Auth React in this PR: ${run_auth_react}"
+          bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml \
+            packages/config/src \
+            packages/email/src \
+            packages/auth/src \
+            packages/auth-web/src
 
-          if [[ ${#targets[@]} -gt 0 ]]; then
-            bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml "${targets[@]}"
-          fi
+      # auth-react must run in its own package scope to avoid module mock leakage
+      - name: Unit test auth-react
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p coverage
 
-          if [[ "${run_auth_react}" == "true" ]]; then
-            # Run auth-react in package scope to avoid root-run module mock leakage.
-            # hooks.test.tsx mocks ./context at module scope; keep it in a separate Bun process
-            # so it cannot contaminate AuthProvider/AuthGuard/context tests.
-            pushd packages/auth-react >/dev/null
+          pushd packages/auth-react >/dev/null
 
-            bun test \
-              --coverage \
-              --coverage-reporter=lcov \
-              --coverage-dir ./coverage/non-hooks \
-              --preload ./src/test-setup.ts \
-              --max-concurrency 1 \
-              src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx
+          bun test \
+            --coverage \
+            --coverage-reporter=lcov \
+            --coverage-dir ./coverage/non-hooks \
+            --preload ./src/test-setup.ts \
+            --max-concurrency 1 \
+            src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx
 
-            bun test \
-              --coverage \
-              --coverage-reporter=lcov \
-              --coverage-dir ./coverage/hooks \
-              --preload ./src/test-setup.ts \
-              --max-concurrency 1 \
-              src/hooks.test.tsx
+          bun test \
+            --coverage \
+            --coverage-reporter=lcov \
+            --coverage-dir ./coverage/hooks \
+            --preload ./src/test-setup.ts \
+            --max-concurrency 1 \
+            src/hooks.test.tsx
 
-            mkdir -p coverage
-            cat ./coverage/non-hooks/lcov.info ./coverage/hooks/lcov.info > ./coverage/lcov.info
-            popd >/dev/null
+          mkdir -p coverage
+          cat ./coverage/non-hooks/lcov.info ./coverage/hooks/lcov.info > ./coverage/lcov.info
+          popd >/dev/null
 
-            # Merge auth-react coverage into root lcov for Codecov upload.
-            if [[ -f packages/auth-react/coverage/lcov.info ]]; then
-              if [[ -f coverage/lcov.info ]]; then
-                cat packages/auth-react/coverage/lcov.info >> coverage/lcov.info
-              else
-                cp packages/auth-react/coverage/lcov.info coverage/lcov.info
-              fi
+          if [[ -f packages/auth-react/coverage/lcov.info ]]; then
+            if [[ -f coverage/lcov.info ]]; then
+              cat packages/auth-react/coverage/lcov.info >> coverage/lcov.info
+            else
+              cp packages/auth-react/coverage/lcov.info coverage/lcov.info
             fi
           fi
 
+      # Run web tests (vitest in apps/web)
+      - name: Unit test web
+        run: bun run --filter web test
+
       - name: Upload test results to Codecov (Test Analytics)
-        if: needs.lint.outputs.any_changed == 'true' && hashFiles('test-results/junit.xml') != ''
+        if: hashFiles('test-results/junit.xml') != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -331,7 +164,7 @@ jobs:
           verbose: true
 
       - name: Upload coverage to Codecov
-        if: needs.lint.outputs.any_changed == 'true' && hashFiles('coverage/lcov.info') != ''
+        if: hashFiles('coverage/lcov.info') != ''
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
