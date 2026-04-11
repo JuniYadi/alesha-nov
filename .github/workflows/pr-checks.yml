@@ -76,6 +76,7 @@ jobs:
             auth=true
             auth_web=true
             auth_react=true
+            web=true
           fi
 
           # Dependency propagation (both directions for CI build/test correctness):
@@ -118,6 +119,14 @@ jobs:
           fi
           if [[ "$auth_web" == "true" ]]; then
             auth_react=true
+          fi
+
+          # Transitive closure guard:
+          # if any auth-family package is selected, both config and email
+          # must be selected as upstream build dependencies.
+          if [[ "$auth" == "true" || "$auth_web" == "true" || "$auth_react" == "true" ]]; then
+            config=true
+            email=true
           fi
 
           any_changed=false
@@ -222,6 +231,8 @@ jobs:
         if: needs.lint.outputs.any_changed != 'true'
         run: echo "No package changes detected. Skipping build/test/coverage."
 
+      # Build order matters for workspace-linked DTS resolution.
+      # Keep upstream-first order: config -> email -> auth -> auth-web -> auth-react
       - name: Build @alesha-nov/config
         if: needs.lint.outputs.config == 'true'
         run: bun run --filter @alesha-nov/config build
