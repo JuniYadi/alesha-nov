@@ -61,6 +61,21 @@ export interface MagicLinkVerifyInput {
   token: string;
 }
 
+export interface OAuthAccountLinkInput {
+  providerAccountId: string;
+  providerEmail?: string;
+}
+
+export interface OAuthAccountLink {
+  id: string;
+  userId: string;
+  provider: OAuthProvider;
+  providerAccountId: string;
+  providerEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface UseAuthGuardOptions {
   redirectTo?: string;
   navigationAdapter?: AuthGuardNavigationAdapter;

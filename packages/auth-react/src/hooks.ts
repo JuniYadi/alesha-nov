@@ -7,6 +7,8 @@ import type {
   SignupInput,
   PublicUser,
   OAuthProvider,
+  OAuthAccountLinkInput,
+  OAuthAccountLink,
   MagicLinkRequestInput,
   MagicLinkVerifyInput,
   UseAuthGuardOptions,
@@ -256,6 +258,38 @@ export function useOAuthLogin(config: AuthApiConfig = {}) {
   );
 
   return { login, loading, error };
+}
+
+export function useOAuthLink(config: AuthApiConfig = {}) {
+  const auth = useAuth();
+  const [data, setData] = useState<OAuthAccountLink | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const link = useCallback(
+    async (provider: OAuthProvider, input: OAuthAccountLinkInput) => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (auth.status !== "authenticated") {
+          throw new Error("Authentication required to link OAuth accounts");
+        }
+
+        const res = await postJson<{ account: OAuthAccountLink }>(`/oauth/${provider}/link`, input, config);
+        setData(res.account);
+        return res.account;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "OAuth link failed";
+        setError(msg);
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [auth, config],
+  );
+
+  return { link, data, error, loading };
 }
 
 export function useAuthGuard(options: UseAuthGuardOptions = {}) {
