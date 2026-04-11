@@ -1,5 +1,12 @@
 # @alesha-nov/auth
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [741a94f]
+  - @alesha-nov/config@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
