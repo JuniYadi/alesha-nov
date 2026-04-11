@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js for npm publish (OIDC Trusted Publishing)
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '24.x'
           registry-url: https://registry.npmjs.org
           # No token secret needed — id-token: write triggers OIDC exchange
 
