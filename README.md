@@ -1,6 +1,7 @@
 # alesha-nov monorepo (nodejs)
 
 [![codecov](https://codecov.io/gh/JuniYadi/alesha-nov/graph/badge.svg?token=x0kbSnh7Ku)](https://codecov.io/gh/JuniYadi/alesha-nov)
+[![Release](https://github.com/JuniYadi/alesha-nov/actions/workflows/release.yml/badge.svg)](https://github.com/JuniYadi/alesha-nov/actions/workflows/release.yml)
 
 Bun workspace monorepo for auth-focused packages and a TanStack Start SSR demo app.
 
