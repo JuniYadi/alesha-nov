@@ -10,6 +10,7 @@ export {
   useMagicLinkRequest,
   useMagicLinkVerify,
   useOAuthLogin,
+  useOAuthLink,
   useAuthGuard,
 } from "./hooks";
 
@@ -24,5 +25,7 @@ export type {
   AuthGuardNavigationAdapter,
   MagicLinkRequestInput,
   MagicLinkVerifyInput,
+  OAuthAccountLinkInput,
+  OAuthAccountLink,
   UseAuthGuardOptions,
 } from "./types";

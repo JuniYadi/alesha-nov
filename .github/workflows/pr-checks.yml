@@ -119,26 +119,18 @@ jobs:
           set -euo pipefail
           mkdir -p coverage
 
+          # Run auth-react tests in a single coverage pass to avoid duplicate
+          # SF records in lcov that can confuse patch coverage calculation.
           pushd packages/auth-react >/dev/null
 
           bun test \
             --coverage \
             --coverage-reporter=lcov \
-            --coverage-dir ./coverage/non-hooks \
+            --coverage-dir ./coverage \
             --preload ./src/test-setup.ts \
             --max-concurrency 1 \
-            src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx
+            src/index.test.ts src/auth-guard.test.tsx src/context.test.tsx src/hooks.test.tsx
 
-          bun test \
-            --coverage \
-            --coverage-reporter=lcov \
-            --coverage-dir ./coverage/hooks \
-            --preload ./src/test-setup.ts \
-            --max-concurrency 1 \
-            src/hooks.test.tsx
-
-          mkdir -p coverage
-          cat ./coverage/non-hooks/lcov.info ./coverage/hooks/lcov.info > ./coverage/lcov.info
           popd >/dev/null
 
           if [[ -f packages/auth-react/coverage/lcov.info ]]; then

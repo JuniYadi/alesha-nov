@@ -20,6 +20,7 @@ describe("auth-react exports", () => {
       useMagicLinkRequest,
       useMagicLinkVerify,
       useOAuthLogin,
+      useOAuthLink,
       useAuthGuard,
     } = await import("./hooks");
 
@@ -31,6 +32,7 @@ describe("auth-react exports", () => {
     expect(useMagicLinkRequest).toBeDefined();
     expect(useMagicLinkVerify).toBeDefined();
     expect(useOAuthLogin).toBeDefined();
+    expect(useOAuthLink).toBeDefined();
     expect(useAuthGuard).toBeDefined();
   });
 
@@ -51,6 +53,7 @@ describe("auth-react exports", () => {
     expect(mod.useResetPassword).toBeDefined();
     expect(mod.useMagicLinkRequest).toBeDefined();
     expect(mod.useMagicLinkVerify).toBeDefined();
+    expect(mod.useOAuthLink).toBeDefined();
     expect(mod.useAuthGuard).toBeDefined();
     expect(mod.AuthGuard).toBeDefined();
   });
