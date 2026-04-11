@@ -37,11 +37,19 @@ jobs:
           registry-url: https://registry.npmjs.org
           # No token secret needed — id-token: write triggers OIDC exchange
 
+      - name: Update npm to latest (OIDC support)
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Build packages
         run: bun run build
+
+      - name: Validate publishing prerequisites (OIDC)
+        uses: GarthDB/changesets-publish-validator@v1
+        with:
+          auth-method: oidc
 
       - name: Create version PR or publish
         uses: changesets/action@v1
