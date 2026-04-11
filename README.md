@@ -55,21 +55,40 @@ Each package README tracks details. Highlights:
 
 A root `Dockerfile` is provided for running `apps/web` SSR server.
 
-### Build image
+### Build image (local)
 
 ```bash
 docker build -t alesha-web:local .
 ```
 
-### Run image
+### Run image (local)
 
 ```bash
 docker run --rm -p 3000:3000 \
   -e DB_TYPE=sqlite \
   -e DATABASE_URL=':memory:' \
-  -e SESSION_SECRET='replace-with-strong-secret' \
+  -e SESSION_SECRET='replac...cret' \
   alesha-web:local
 ```
+
+Then open: `http://localhost:3000`
+
+### Pull and run from GHCR (`main` tag)
+
+The `Docker GHCR` workflow (`.github/workflows/docker-ghcr.yml`) publishes:
+
+- `ghcr.io/<owner>/alesha-web:sha-<shortsha>`
+- `ghcr.io/<owner>/alesha-web:main` (default branch)
+
+```bash
+docker run --rm -p 3000:3000 \
+  -e DB_TYPE=sqlite \
+  -e DATABASE_URL=':memory:' \
+  -e SESSION_SECRET='replac...cret' \
+  ghcr.io/<owner>/alesha-web:main
+```
+
+Replace `<owner>` with your GitHub org/user (for this repo: `juniyadi`).
 
 Then open: `http://localhost:3000`
 
