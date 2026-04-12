@@ -1,27 +1,47 @@
 import { createAuthService } from '@alesha-nov/auth'
 import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
-import { type DBType } from '@alesha-nov/config'
-import { resolveSecureCookie, resolveSessionSecret } from './auth-config'
-
-function resolveDbType(): DBType {
-  const raw = process.env.DB_TYPE?.toLowerCase()
-  if (raw === 'mysql' || raw === 'postgresql' || raw === 'sqlite') return raw
-  if (raw === 'postgres') return 'postgresql'
-  return 'sqlite'
-}
+import {
+  authMigrationsBundle,
+  createDatabaseClient,
+  resolveDBType,
+  runMigrations,
+} from '@alesha-nov/config'
+import { createAuthEmailOptions } from './email'
+import { resolveSessionConfig, resolveJWTSecret } from './auth-config'
 
 async function buildHandler() {
-  const authService = await createAuthService({
-    type: resolveDbType(),
-    url: process.env.DATABASE_URL ?? ':memory:',
-  })
+  const dbType = resolveDBType()
+  const databaseUrl = process.env.DATABASE_URL
+
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required')
+  }
+
+  const dbConfig = {
+    type: dbType,
+    url: databaseUrl,
+  }
+
+  const dbClient = createDatabaseClient(dbConfig)
+  await runMigrations(dbClient, authMigrationsBundle)
+
+  const authService = await createAuthService(
+    dbConfig,
+    {
+      email: createAuthEmailOptions(),
+    },
+  )
+
+  const sessionConfig = resolveSessionConfig()
 
   return createTanstackAuthHandler({
     authService,
     basePath: '/auth',
-    secureCookie: resolveSecureCookie(),
-    sessionSecret: resolveSessionSecret(),
+    cookieName: sessionConfig.cookieName,
+    sessionTtlSeconds: sessionConfig.ttlSeconds,
+    secureCookie: sessionConfig.secure,
+    sessionSecret: resolveJWTSecret(),
   })
 }
 
@@ -33,5 +53,5 @@ export async function getAuthHandler() {
 }
 
 export async function getServerSession(request: Request): Promise<AuthSession | null> {
-  return getSessionFromRequest(request, resolveSessionSecret())
+  return getSessionFromRequest(request, resolveJWTSecret())
 }

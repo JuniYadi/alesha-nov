@@ -8,53 +8,80 @@ afterEach(() => {
 })
 
 describe('server/auth env resolution', () => {
-  test('resolveSessionSecret uses env when set', async () => {
-    process.env.SESSION_SECRET = '0123456789abcdef0123456789abcdef'
+  test('resolveJWTSecret uses env when set', async () => {
+    process.env.AUTH_JWT_SECRET = '0123456789abcdef0123456789abcdef'
 
-    const { resolveSessionSecret } = await import('./auth-config')
-    expect(resolveSessionSecret()).toBe('0123456789abcdef0123456789abcdef')
+    const { resolveJWTSecret } = await import('./auth-config')
+    expect(resolveJWTSecret()).toBe('0123456789abcdef0123456789abcdef')
   })
 
-  test('resolveSessionSecret falls back to dev secret outside production', async () => {
-    delete process.env.SESSION_SECRET
-    process.env.NODE_ENV = 'development'
+  test('resolveJWTSecret falls back to JWT_SECRET alias', async () => {
+    delete process.env.AUTH_JWT_SECRET
+    process.env.JWT_SECRET = 'abcdef0123456789abcdef0123456789'
 
-    const { resolveSessionSecret } = await import('./auth-config')
-    expect(resolveSessionSecret()).toBe('dev-session-secret-change-me')
+    const { resolveJWTSecret } = await import('./auth-config')
+    expect(resolveJWTSecret()).toBe('abcdef0123456789abcdef0123456789')
   })
 
-  test('resolveSessionSecret throws when missing in production', async () => {
-    delete process.env.SESSION_SECRET
-    process.env.NODE_ENV = 'production'
+  test('resolveJWTSecret throws when missing', async () => {
+    delete process.env.AUTH_JWT_SECRET
+    delete process.env.JWT_SECRET
 
-    const { resolveSessionSecret } = await import('./auth-config')
-    expect(() => resolveSessionSecret()).toThrowError('SESSION_SECRET is required in production')
+    const { resolveJWTSecret } = await import('./auth-config')
+    expect(() => resolveJWTSecret()).toThrowError('Missing JWT secret. Set AUTH_JWT_SECRET or JWT_SECRET.')
   })
 
-  test('resolveSecureCookie defaults true in production', async () => {
-    process.env.NODE_ENV = 'production'
-    delete process.env.AUTH_SECURE_COOKIE
+  test('resolveSessionConfig resolves explicit values', async () => {
+    process.env.AUTH_SESSION_COOKIE_NAME = 'app_session'
+    process.env.AUTH_SESSION_TTL_SECONDS = '7200'
+    process.env.AUTH_SESSION_SECURE = 'true'
+    process.env.AUTH_SESSION_SAME_SITE = 'strict'
 
-    const { resolveSecureCookie } = await import('./auth-config')
-    expect(resolveSecureCookie()).toBe(true)
+    const { resolveSessionConfig } = await import('./auth-config')
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: 'app_session',
+      ttlSeconds: 7200,
+      secure: true,
+      sameSite: 'strict',
+    })
   })
 
-  test('resolveSecureCookie defaults false in development', async () => {
-    process.env.NODE_ENV = 'development'
-    delete process.env.AUTH_SECURE_COOKIE
+  test('resolveSessionConfig applies defaults when env is missing', async () => {
+    delete process.env.AUTH_SESSION_COOKIE_NAME
+    delete process.env.AUTH_SESSION_TTL_SECONDS
+    delete process.env.AUTH_SESSION_SECURE
+    delete process.env.AUTH_SESSION_SAME_SITE
 
-    const { resolveSecureCookie } = await import('./auth-config')
-    expect(resolveSecureCookie()).toBe(false)
+    const { resolveSessionConfig } = await import('./auth-config')
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: 'alesha_session',
+      ttlSeconds: 604800,
+      secure: false,
+      sameSite: 'lax',
+    })
   })
 
-  test('resolveSecureCookie allows explicit override', async () => {
-    process.env.NODE_ENV = 'production'
-    process.env.AUTH_SECURE_COOKIE = 'false'
+  test('resolveSessionConfig supports alternative env names', async () => {
+    delete process.env.AUTH_SESSION_COOKIE_NAME
+    delete process.env.AUTH_SESSION_TTL_SECONDS
+    delete process.env.AUTH_SESSION_SECURE
+    delete process.env.AUTH_SESSION_SAME_SITE
+    process.env.SESSION_COOKIE_NAME = 'legacy_session'
+    process.env.SESSION_TTL_SECONDS = '900'
+    process.env.SESSION_SECURE = 'true'
+    process.env.SESSION_SAME_SITE = 'none'
 
-    const { resolveSecureCookie } = await import('./auth-config')
-    expect(resolveSecureCookie()).toBe(false)
+    const { resolveSessionConfig } = await import('./auth-config')
+    expect(resolveSessionConfig()).toEqual({
+      cookieName: 'legacy_session',
+      ttlSeconds: 900,
+      secure: true,
+      sameSite: 'none',
+    })
 
-    process.env.AUTH_SECURE_COOKIE = '1'
-    expect(resolveSecureCookie()).toBe(true)
+    delete process.env.SESSION_COOKIE_NAME
+    delete process.env.SESSION_TTL_SECONDS
+    delete process.env.SESSION_SECURE
+    delete process.env.SESSION_SAME_SITE
   })
 })
