@@ -1,4 +1,31 @@
-import { SQL } from "bun";
+import type { SQL } from "bun";
+
+interface SQLConstructor {
+  new (url: string, options?: { max?: number }): SQL;
+}
+
+interface BunRuntime {
+  SQL?: SQLConstructor;
+  Bun?: {
+    SQL?: SQLConstructor;
+  };
+}
+
+function resolveSQLConstructor(): SQLConstructor {
+  const globalThisAsBun = globalThis as BunRuntime;
+
+  if (typeof globalThisAsBun.SQL === "function") {
+    return globalThisAsBun.SQL;
+  }
+
+  if (typeof globalThisAsBun.Bun?.SQL === "function") {
+    return globalThisAsBun.Bun.SQL;
+  }
+
+  throw new Error(
+    "Cannot resolve Bun SQL class. Ensure createDatabaseClient is run in Bun runtime."
+  );
+}
 
 export type DBType = "mysql" | "postgresql" | "sqlite";
 
@@ -87,7 +114,9 @@ export function resolveDBType(input?: string): DBType {
 }
 
 export function createDatabaseClient(config: DBConfig): DatabaseClient {
-  const sql = new SQL(config.url, {
+  const SQLConstructor = resolveSQLConstructor();
+
+  const sql = new SQLConstructor(config.url, {
     max: config.maxConnections ?? 10,
   });
 

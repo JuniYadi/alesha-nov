@@ -1,25 +1,22 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import type { AuthSession } from '@alesha-nov/auth-web'
+import { dashboardBeforeLoad } from './dashboard'
 
-const getServerSessionOrNullMock = vi.fn<() => Promise<{ userId: string } | null>>()
-
-vi.mock('../server/session', () => ({
-  getServerSessionOrNull: () => getServerSessionOrNullMock(),
-}))
+const sessionProviderMock = vi.fn<() => Promise<AuthSession | null>>()
 
 describe('dashboard route beforeLoad', () => {
   beforeEach(() => {
-    getServerSessionOrNullMock.mockReset()
+    sessionProviderMock.mockReset()
   })
 
   test('redirects unauthenticated requests to /login with redirect target', async () => {
-    getServerSessionOrNullMock.mockResolvedValue(null)
-
-    const { Route } = await import('./dashboard')
+    sessionProviderMock.mockResolvedValue(null)
 
     try {
-      await Route.options.beforeLoad?.({
+      await dashboardBeforeLoad({
+        sessionProvider: sessionProviderMock,
         location: { href: 'http://localhost:3000/dashboard' },
-      } as never)
+      })
       throw new Error('Expected beforeLoad to throw redirect response')
     } catch (error) {
       expect(error).toBeInstanceOf(Response)
@@ -31,14 +28,19 @@ describe('dashboard route beforeLoad', () => {
   })
 
   test('allows authenticated requests without redirect', async () => {
-    getServerSessionOrNullMock.mockResolvedValue({ userId: 'user-1' })
-
-    const { Route } = await import('./dashboard')
+    sessionProviderMock.mockResolvedValue({
+      userId: 'user-1',
+      sessionId: 'session-1',
+      email: 'user@example.com',
+      roles: ['user'],
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })
 
     await expect(
-      Route.options.beforeLoad?.({
+      dashboardBeforeLoad({
+        sessionProvider: sessionProviderMock,
         location: { href: 'http://localhost:3000/dashboard' },
-      } as never),
+      }),
     ).resolves.toBeUndefined()
   })
 })
