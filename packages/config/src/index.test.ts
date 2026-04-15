@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   authMigrationsBundle,
+  config,
   resolveDBType,
   resolveEmailTransportConfig,
   resolveJWTSecret,
@@ -46,6 +47,10 @@ const ENV_KEYS = [
   "EMAIL_SMTP_USERNAME",
   "AUTH_EMAIL_SMTP_PASSWORD",
   "EMAIL_SMTP_PASSWORD",
+  "FILESYSTEM_S3_BUCKET_NAME",
+  "CONFIG_TEST_NUM",
+  "CONFIG_TEST_BOOL",
+  "CONFIG_TEST_PARSE",
 ] as const;
 
 afterEach(() => {
@@ -61,6 +66,44 @@ describe("resolveDBType", () => {
 
   test("throws on invalid value", () => {
     expect(() => resolveDBType("oracle")).toThrow();
+  });
+});
+
+describe("config helper", () => {
+  test("reads underscore key from env", () => {
+    process.env.AWS_S3_BUCKET = "my-bucket";
+
+    expect(config("aws_s3_bucket") ?? "").toBe("my-bucket");
+    expect(config("AWS_S3_BUCKET") ?? "").toBe("my-bucket");
+  });
+
+  test("reads dotted key from env as Laravel-style mapping", () => {
+    process.env.FILESYSTEM_S3_BUCKET_NAME = "my-json-bucket";
+
+    expect(config("filesystem.s3.bucket.name") ?? "").toBe("my-json-bucket");
+  });
+
+  test("supports defaultValue fallback", () => {
+    expect(config("missing.bucket.name", { defaultValue: "default-bucket" })).toBe(
+      "default-bucket"
+    );
+    expect(config("missing.number", { defaultValue: 1200 })).toBe(1200);
+  });
+
+  test("supports parse option", () => {
+    process.env.CONFIG_TEST_NUM = "8080";
+    process.env.CONFIG_TEST_BOOL = "true";
+    process.env.CONFIG_TEST_PARSE = " 42 ";
+
+    expect(
+      config("config.test.num", {
+        parse: (value) => Number.parseInt(value, 10),
+      })
+    ).toBe(8080);
+    expect(config("config.test.bool", { parse: (value) => value === "true" })).toBe(
+      true
+    );
+    expect(config("config.test.parse", { parse: (value) => value.trim() })).toBe("42");
   });
 });
 

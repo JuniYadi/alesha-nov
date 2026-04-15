@@ -1,4 +1,10 @@
-import type { SQL } from "bun";
+interface SQL {
+  unsafe<T = unknown>(query: string): Promise<T>;
+  <T = unknown>(
+    query: TemplateStringsArray,
+    ...values: unknown[]
+  ): Promise<T[]>;
+}
 
 interface SQLConstructor {
   new (url: string, options?: { max?: number }): SQL;
@@ -9,6 +15,72 @@ interface BunRuntime {
   Bun?: {
     SQL?: SQLConstructor;
   };
+}
+
+export interface ConfigOptions<T = string> {
+  /**
+   * Optional default value returned when no environment variable resolves.
+   */
+  defaultValue?: T;
+
+  /**
+   * Optional parser to transform the raw env string.
+   */
+  parse?: (value: string) => T;
+}
+
+/**
+ * Resolve a config value from environment using Laravel-style dotted keys.
+ *
+ * `config('aws_s3_bucket')` -> reads `AWS_S3_BUCKET`
+ * `config('filesystem.s3.bucket.name')` -> reads `FILESYSTEM_S3_BUCKET_NAME`
+ */
+export function config<T = string>(
+  key: string,
+  options: ConfigOptions<T> = {}
+): T | undefined {
+  const directKey = key.trim().toUpperCase();
+  const dottedKey = key.trim().replace(/[.\\-]/g, "_").toUpperCase();
+
+  const candidates = Array.from(
+    new Set([directKey, dottedKey])
+  ).filter(Boolean);
+
+  for (const envKey of candidates) {
+    const value = process.env[envKey]?.trim();
+    if (value) {
+      if (options.parse) {
+        return options.parse(value);
+      }
+
+      if (options.defaultValue !== undefined) {
+        return coerceConfigValue(value, options.defaultValue);
+      }
+
+      return value as T;
+    }
+  }
+
+  return options.defaultValue;
+}
+
+function coerceConfigValue<T>(value: string, fallback: T): T {
+  if (typeof fallback === "number") {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`Invalid numeric config value: ${value}`);
+    }
+    return parsed as T;
+  }
+
+  if (typeof fallback === "boolean") {
+    const normalized = value.toLowerCase();
+    if (normalized === "true") return true as T;
+    if (normalized === "false") return false as T;
+    throw new Error(`Invalid boolean config value: ${value}`);
+  }
+
+  return value as T;
 }
 
 function resolveSQLConstructor(): SQLConstructor {
@@ -98,7 +170,7 @@ export interface DatabaseClient {
 }
 
 export function resolveDBType(input?: string): DBType {
-  switch ((input ?? process.env.DB_TYPE ?? "").toLowerCase()) {
+  switch ((input ?? config("DB_TYPE") ?? "").toLowerCase()) {
     case "mysql":
       return "mysql";
     case "postgresql":
@@ -121,14 +193,6 @@ export function createDatabaseClient(config: DBConfig): DatabaseClient {
   });
 
   return { sql, config };
-}
-
-function readEnv(keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = process.env[key]?.trim();
-    if (value) return value;
-  }
-  return undefined;
 }
 
 function parsePositiveInteger(value: string, fieldName: string): number {
@@ -163,7 +227,10 @@ function parseSessionSameSite(value: string): SessionSameSite {
 }
 
 export function resolveJWTSecret(input?: string): string {
-  const secret = input?.trim() || readEnv(["AUTH_JWT_SECRET", "JWT_SECRET"]);
+  const secret =
+    input?.trim() ||
+    config("AUTH_JWT_SECRET") ||
+    config("JWT_SECRET");
   if (!secret) {
     throw new Error("Missing JWT secret. Set AUTH_JWT_SECRET or JWT_SECRET.");
   }
@@ -172,12 +239,19 @@ export function resolveJWTSecret(input?: string): string {
 
 export function resolveSessionConfig(): SessionConfig {
   const cookieName =
-    readEnv(["AUTH_SESSION_COOKIE_NAME", "SESSION_COOKIE_NAME"]) ??
+    config("AUTH_SESSION_COOKIE_NAME") ||
+    config("SESSION_COOKIE_NAME") ||
     "alesha_session";
 
-  const ttlRaw = readEnv(["AUTH_SESSION_TTL_SECONDS", "SESSION_TTL_SECONDS"]);
-  const secureRaw = readEnv(["AUTH_SESSION_SECURE", "SESSION_SECURE"]);
-  const sameSiteRaw = readEnv(["AUTH_SESSION_SAME_SITE", "SESSION_SAME_SITE"]);
+  const ttlRaw =
+    config("AUTH_SESSION_TTL_SECONDS") ||
+    config("SESSION_TTL_SECONDS");
+  const secureRaw =
+    config("AUTH_SESSION_SECURE") ||
+    config("SESSION_SECURE");
+  const sameSiteRaw =
+    config("AUTH_SESSION_SAME_SITE") ||
+    config("SESSION_SAME_SITE");
 
   return {
     cookieName,
@@ -189,15 +263,15 @@ export function resolveSessionConfig(): SessionConfig {
 
 export function resolveMagicLinkConfig(): MagicLinkConfig {
   const ttlRaw =
-    readEnv(["AUTH_MAGIC_LINK_TTL_SECONDS", "MAGIC_LINK_TTL_SECONDS"]) ??
+    config("AUTH_MAGIC_LINK_TTL_SECONDS") ||
+    config("MAGIC_LINK_TTL_SECONDS") ||
     "900";
 
-  const sender = readEnv([
-    "AUTH_MAGIC_LINK_SENDER",
-    "MAGIC_LINK_SENDER",
-    "AUTH_EMAIL_FROM",
-    "EMAIL_FROM",
-  ]);
+  const sender =
+    config("AUTH_MAGIC_LINK_SENDER") ||
+    config("MAGIC_LINK_SENDER") ||
+    config("AUTH_EMAIL_FROM") ||
+    config("EMAIL_FROM");
 
   if (!sender) {
     throw new Error(
@@ -216,7 +290,7 @@ export function resolveMagicLinkConfig(): MagicLinkConfig {
 }
 
 function resolveSESTransportConfig(): EmailTransportConfig {
-  const region = readEnv(["AUTH_EMAIL_SES_REGION", "EMAIL_SES_REGION"]);
+  const region = config("AUTH_EMAIL_SES_REGION") || config("EMAIL_SES_REGION");
 
   if (!region) {
     throw new Error("Missing SES region. Set AUTH_EMAIL_SES_REGION or EMAIL_SES_REGION.");
@@ -229,17 +303,24 @@ function resolveSESTransportConfig(): EmailTransportConfig {
 }
 
 function resolveSMTPTransportConfig(): EmailTransportConfig {
-  const host = readEnv(["AUTH_EMAIL_SMTP_HOST", "EMAIL_SMTP_HOST"]);
+  const host = config("AUTH_EMAIL_SMTP_HOST") || config("EMAIL_SMTP_HOST");
 
   if (!host) {
     throw new Error("Missing SMTP host. Set AUTH_EMAIL_SMTP_HOST or EMAIL_SMTP_HOST.");
   }
 
-  const portRaw = readEnv(["AUTH_EMAIL_SMTP_PORT", "EMAIL_SMTP_PORT"]) ?? "587";
+  const portRaw =
+    config("AUTH_EMAIL_SMTP_PORT") ||
+    config("EMAIL_SMTP_PORT") ||
+    "587";
   const secureRaw =
-    readEnv(["AUTH_EMAIL_SMTP_SECURE", "EMAIL_SMTP_SECURE"]) ?? "false";
-  const username = readEnv(["AUTH_EMAIL_SMTP_USERNAME", "EMAIL_SMTP_USERNAME"]);
-  const password = readEnv(["AUTH_EMAIL_SMTP_PASSWORD", "EMAIL_SMTP_PASSWORD"]);
+    config("AUTH_EMAIL_SMTP_SECURE") ||
+    config("EMAIL_SMTP_SECURE") ||
+    "false";
+  const username =
+    config("AUTH_EMAIL_SMTP_USERNAME") || config("EMAIL_SMTP_USERNAME");
+  const password =
+    config("AUTH_EMAIL_SMTP_PASSWORD") || config("EMAIL_SMTP_PASSWORD");
 
   const port = parsePositiveInteger(portRaw, "smtp port");
   if (port > 65535) {
@@ -259,14 +340,14 @@ function resolveSMTPTransportConfig(): EmailTransportConfig {
 }
 
 export function resolveEmailTransportConfig(): EmailTransportConfig | undefined {
-  const typeInput = readEnv(["AUTH_EMAIL_TRANSPORT", "EMAIL_TRANSPORT"]);
+  const typeInput = config("AUTH_EMAIL_TRANSPORT") || config("EMAIL_TRANSPORT");
 
   if (!typeInput) {
     const hasSESConfig = Boolean(
-      readEnv(["AUTH_EMAIL_SES_REGION", "EMAIL_SES_REGION"])
+      config("AUTH_EMAIL_SES_REGION") || config("EMAIL_SES_REGION")
     );
     const hasSMTPConfig = Boolean(
-      readEnv(["AUTH_EMAIL_SMTP_HOST", "EMAIL_SMTP_HOST"])
+      config("AUTH_EMAIL_SMTP_HOST") || config("EMAIL_SMTP_HOST")
     );
 
     if (!hasSESConfig && !hasSMTPConfig) {
@@ -297,15 +378,14 @@ export function resolveEmailTransportConfig(): EmailTransportConfig | undefined 
 
 function resolveOAuthProviderConfig(provider: "google" | "github"): OAuthProviderConfig | undefined {
   const upper = provider.toUpperCase();
-  const clientId = readEnv([`AUTH_OAUTH_${upper}_CLIENT_ID`, `${upper}_CLIENT_ID`]);
-  const clientSecret = readEnv([
-    `AUTH_OAUTH_${upper}_CLIENT_SECRET`,
-    `${upper}_CLIENT_SECRET`,
-  ]);
-  const redirectUri = readEnv([
-    `AUTH_OAUTH_${upper}_REDIRECT_URI`,
-    `${upper}_REDIRECT_URI`,
-  ]);
+  const clientId =
+    config(`AUTH_OAUTH_${upper}_CLIENT_ID`) || config(`${upper}_CLIENT_ID`);
+  const clientSecret =
+    config(`AUTH_OAUTH_${upper}_CLIENT_SECRET`) ||
+    config(`${upper}_CLIENT_SECRET`);
+  const redirectUri =
+    config(`AUTH_OAUTH_${upper}_REDIRECT_URI`) ||
+    config(`${upper}_REDIRECT_URI`);
 
   if (!clientId && !clientSecret && !redirectUri) {
     return undefined;
