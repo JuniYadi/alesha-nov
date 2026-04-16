@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { authMigrationsBundle } from "@alesha-nov/config/auth-migrations";
+import { authMigrationsBundle } from "@alesha-nov/db/auth-migrations";
 import { authMigrations } from "./migrations";
 
 describe("auth migrations", () => {
-  test("re-exports config auth migration bundle as canonical source", () => {
+  test("re-exports db auth migration bundle as canonical source", () => {
     expect(authMigrations).toBe(authMigrationsBundle);
   });
 

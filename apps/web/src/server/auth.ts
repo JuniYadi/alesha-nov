@@ -1,10 +1,9 @@
 import { createAuthService } from '@alesha-nov/auth'
 import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
-import { type DBType } from '@alesha-nov/config'
 import { resolveSecureCookie, resolveSessionSecret } from './auth-config'
 
-function resolveDbType(): DBType {
+function resolveDbType(): 'mysql' | 'postgresql' | 'sqlite' {
   const raw = process.env.DB_TYPE?.toLowerCase()
   if (raw === 'mysql' || raw === 'postgresql' || raw === 'sqlite') return raw
   if (raw === 'postgres') return 'postgresql'

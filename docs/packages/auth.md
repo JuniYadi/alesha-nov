@@ -12,11 +12,11 @@ Full-featured authentication service: email/password signup & login, magic links
 
 ## Setup
 
-Create the auth service by passing a database config from `@alesha-nov/config`. The service auto-runs migrations on startup.
+Create the auth service by passing a database config from `@alesha-nov/db`. The service auto-runs migrations on startup.
 
 ```ts
 import { createAuthService } from "@alesha-nov/auth";
-import { resolveDBType, createDatabaseClient } from "@alesha-nov/config";
+import { resolveDBType } from "@alesha-nov/db";
 
 const dbConfig = {
   type: resolveDBType(),

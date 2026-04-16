@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
-  authMigrationsBundle,
-  resolveDBType,
   resolveEmailTransportConfig,
   resolveJWTSecret,
   resolveMagicLinkConfig,
@@ -52,16 +50,6 @@ afterEach(() => {
   for (const key of ENV_KEYS) {
     delete process.env[key];
   }
-});
-
-describe("resolveDBType", () => {
-  test("maps postgres alias", () => {
-    expect(resolveDBType("postgres")).toBe("postgresql");
-  });
-
-  test("throws on invalid value", () => {
-    expect(() => resolveDBType("oracle")).toThrow();
-  });
 });
 
 describe("resolveJWTSecret", () => {
@@ -289,18 +277,5 @@ describe("resolveOAuthConfig", () => {
   test("throws when provider config is incomplete", () => {
     process.env.AUTH_OAUTH_GITHUB_CLIENT_ID = "github-id";
     expect(() => resolveOAuthConfig()).toThrow("Incomplete github OAuth env");
-  });
-});
-
-describe("auth migrations bundle", () => {
-  test("contains required auth migration tables", () => {
-    const sql = authMigrationsBundle.map((m) => m.sql).join("\n");
-    expect(sql.includes("auth_users")).toBe(true);
-    expect(sql.includes("auth_sessions")).toBe(true);
-    expect(sql.includes("auth_magic_link_tokens")).toBe(true);
-    expect(sql.includes("auth_user_roles")).toBe(true);
-    expect(sql.includes("auth_oauth_accounts")).toBe(true);
-    expect(sql.includes("auth_password_reset_tokens")).toBe(true);
-    expect(sql.includes("auth_email_verification_tokens")).toBe(true);
   });
 });

@@ -1,3 +1,3 @@
-import { authMigrationsBundle } from "@alesha-nov/config/auth-migrations";
+import { authMigrationsBundle } from "@alesha-nov/db/auth-migrations";
 
 export const authMigrations = authMigrationsBundle;

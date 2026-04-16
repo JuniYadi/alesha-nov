@@ -16,7 +16,7 @@ const config = defineConfig({
     viteReact(),
   ],
   ssr: {
-    // @alesha-nov/config uses Bun's SQL class — externalize so it only
+    // @alesha-nov/db uses Bun's SQL class — externalize so it only
     // runs in Bun Node.js runtime, not bundled into SSR output.
     external: ['bun'],
   },

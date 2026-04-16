@@ -3,6 +3,7 @@
   - [Example App — TanStack Start](apps/example)
 - [Packages](packages/)
   - [@alesha-nov/config](packages/config)
+  - [@alesha-nov/db](packages/db)
   - [@alesha-nov/auth](packages/auth)
   - [@alesha-nov/email](packages/email)
   - [@alesha-nov/auth-web](packages/auth-web)

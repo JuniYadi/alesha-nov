@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { ensureMigrationsTable, runMigrations, type Migration } from "./index";
 
-describe("config migrations", () => {
+describe("db migrations", () => {
   test("ensureMigrationsTable executes CREATE TABLE statement", async () => {
     const unsafeCalls: string[] = [];
     const client = {

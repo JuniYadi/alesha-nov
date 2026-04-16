@@ -8,7 +8,8 @@ Bun workspace monorepo for auth-focused packages and a TanStack Start SSR demo a
 ## Workspace layout
 
 - `apps/web` — TanStack Start SSR app demonstrating auth flows
-- `packages/config` — DB + auth/email config resolvers, migration primitives
+- `packages/config` — auth/email config resolvers (env-driven)
+- `packages/db` — Bun SQL database client factory + migration primitives
 - `packages/auth` — auth core service (email/password, magic link, OAuth, roles)
 - `packages/auth-web` — HTTP auth routes + TanStack/Next adapters
 - `packages/auth-react` — React provider/hooks/guard for auth-web endpoints

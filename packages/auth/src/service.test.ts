@@ -13,7 +13,7 @@ const sqlTag = ((strings: TemplateStringsArray, ...values: unknown[]) => {
   unsafe?: (query: string) => Promise<unknown[]>;
 };
 
-mock.module("@alesha-nov/config", () => ({
+mock.module("@alesha-nov/db", () => ({
   createDatabaseClient: () => ({ sql: sqlTag }),
   runMigrations: async () => {},
 }));
