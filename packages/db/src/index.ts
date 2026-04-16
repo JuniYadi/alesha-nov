@@ -1,4 +1,4 @@
-import { SQL } from "bun";
+import type { SQL } from "bun";
 
 export type DBType = "mysql" | "postgresql" | "sqlite";
 
@@ -35,9 +35,30 @@ export function resolveDBType(input?: string): DBType {
 }
 
 export function createDatabaseClient(config: DBConfig): DatabaseClient {
-  const sql = new SQL(config.url, {
-    max: config.maxConnections ?? 10,
-  });
+  const BunRuntime = globalThis as {
+    Bun?: {
+      sql?: unknown;
+    };
+  };
+
+  const SQLCtor = BunRuntime.Bun?.sql;
+
+  if (!SQLCtor) {
+    throw new Error(
+      "Bun SQL runtime is not available. Run the app in a Bun runtime to use @alesha-nov/db."
+    );
+  }
+
+  if (typeof SQLCtor !== "function") {
+    throw new Error("Bun SQL runtime is not callable. Check the Bun environment version.");
+  }
+
+  const sql = new (SQLCtor as new (url: string, options?: { max?: number }) => SQL)(
+    config.url,
+    {
+      max: config.maxConnections ?? 10,
+    }
+  );
 
   return { sql, config };
 }

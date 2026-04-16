@@ -1,3 +1,5 @@
+import '@tanstack/react-start/server-only'
+
 import { createAuthService } from '@alesha-nov/auth'
 import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
