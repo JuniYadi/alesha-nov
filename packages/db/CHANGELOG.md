@@ -1,6 +1,6 @@
-# @alesha-nov/config
+# @alesha-nov/db
 
-## 0.3.0
+## 0.2.0
 
 ### Minor Changes
 
@@ -9,15 +9,3 @@
   `@alesha-nov/config` is now focused on environment-based auth/email configuration resolution only, with no Bun SQL runtime surface.
 
   `@alesha-nov/auth` now consumes `@alesha-nov/db` for database client and migration primitives.
-
-## 0.2.1
-
-### Patch Changes
-
-- 741a94f: Add GHCR docker workflow validation coverage and align release-workflow test expectation with public access config.
-
-## 0.2.0
-
-### Minor Changes
-
-- f1e8366: chore: release all packages 0.1.0 → 0.2.0
