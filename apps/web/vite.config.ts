@@ -12,18 +12,25 @@ const config = defineConfig({
     devtools(),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({
+      importProtection: {
+        client: {
+          // @alesha-nov/db is Bun-only and should never be imported on client.
+          specifiers: ['@alesha-nov/db'],
+        },
+      },
+    }),
     viteReact(),
   ],
-  ssr: {
-    // @alesha-nov/db uses Bun's SQL class — externalize so it only
-    // runs in Bun Node.js runtime, not bundled into SSR output.
-    external: ['bun'],
-  },
   build: {
     rollupOptions: {
       external: ['bun'],
     },
+  },
+  ssr: {
+    // Vite will leave Bun built-ins external, so they fail fast only if
+    // actually loaded by Bun runtime code.
+    external: ['bun'],
   },
 })
 
