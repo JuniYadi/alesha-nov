@@ -9,7 +9,8 @@ This example app demonstrates how to consume the `@alesha-nov/\*` packages insid
 | `@alesha-nov/auth` | Core auth service (signup, login, magic-link, OAuth) |
 | `@alesha-nov/auth-web` | HTTP route handlers with cookie sessions |
 | `@alesha-nov/auth-react` | React provider, hooks, and `AuthGuard` component |
-| `@alesha-nov/config` | DB config helpers (SQLite dev mode) |
+| `@alesha-nov/config` | Session/JWT/email/OAuth env resolvers |
+| `@alesha-nov/db` | DB config + migration helpers (SQLite dev mode) |
 
 ## App Structure
 

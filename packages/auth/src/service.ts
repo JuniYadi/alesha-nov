@@ -1,4 +1,4 @@
-import { createDatabaseClient, runMigrations, type DBConfig } from "@alesha-nov/config";
+import { createDatabaseClient, runMigrations, type DBConfig } from "@alesha-nov/db";
 import { randomBytes } from "node:crypto";
 import { authMigrations } from "./migrations";
 import type {

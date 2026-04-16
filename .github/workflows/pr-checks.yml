@@ -55,8 +55,16 @@ jobs:
 
           while IFS= read -r file; do
             if [[ "$file" == packages/*/package.json ]]; then
-              echo "ERROR: Manual edit to $file detected. Package versions should only be changed via changesets!"
-              exit 1
+              status="$(git diff --name-status "$base_sha" "$head_sha" -- "$file" | awk '{print $1}')"
+
+              if [[ "$status" == "A" ]]; then
+                continue
+              fi
+
+              if git diff "$base_sha" "$head_sha" -- "$file" | grep -Eq '^[+-][[:space:]]*"version"[[:space:]]*:'; then
+                echo "ERROR: Manual version edit to $file detected. Package versions should only be changed via changesets!"
+                exit 1
+              fi
             fi
           done < <(git diff --name-only "$base_sha" "$head_sha")
 
@@ -65,6 +73,7 @@ jobs:
       - name: Lint all packages
         run: |
           bun run --filter @alesha-nov/config lint && \
+          bun run --filter @alesha-nov/db lint && \
           bun run --filter @alesha-nov/email lint && \
           bun run --filter @alesha-nov/auth lint && \
           bun run --filter @alesha-nov/auth-web lint && \
@@ -93,6 +102,7 @@ jobs:
       - name: Build packages
         run: |
           bun run --filter @alesha-nov/config build && \
+          bun run --filter @alesha-nov/db build && \
           bun run --filter @alesha-nov/email build && \
           bun run --filter @alesha-nov/auth build && \
           bun run --filter @alesha-nov/auth-web build && \
@@ -108,6 +118,7 @@ jobs:
 
           bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=./test-results/junit.xml \
             packages/config/src \
+            packages/db/src \
             packages/email/src \
             packages/auth/src \
             packages/auth-web/src

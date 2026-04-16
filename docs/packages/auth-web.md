@@ -15,7 +15,7 @@ HTTP route handlers for web authentication. Handles cookie-based sessions, OAuth
 ```ts
 import { createAuthWeb } from "@alesha-nov/auth-web";
 import { createAuthService } from "@alesha-nov/auth";
-import { createDatabaseClient, resolveDBType } from "@alesha-nov/config";
+import { resolveDBType } from "@alesha-nov/db";
 
 const authService = await createAuthService({
   type: resolveDBType(),

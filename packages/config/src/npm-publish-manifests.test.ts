@@ -19,7 +19,7 @@ type PkgManifest = {
   private?: boolean;
 };
 
-const packageDirs = ["config", "auth", "email", "auth-web", "auth-react"] as const;
+const packageDirs = ["config", "db", "auth", "email", "auth-web", "auth-react"] as const;
 
 async function readManifest(pkgDir: (typeof packageDirs)[number]): Promise<PkgManifest> {
   const path = join(repoRoot, "packages", pkgDir, "package.json");
@@ -41,7 +41,11 @@ describe("npm publish metadata", () => {
       expect(manifest.homepage).toBe("https://github.com/JuniYadi/alesha-nov#readme");
       expect(manifest.bugs?.url).toBe("https://github.com/JuniYadi/alesha-nov/issues");
       expect(manifest.engines?.node).toBe(">=22.12.0");
-      expect(manifest.engines?.bun).toBe(">=1.3.0");
+      if (pkgDir === "config") {
+        expect(manifest.engines?.bun).toBeUndefined();
+      } else {
+        expect(manifest.engines?.bun).toBe(">=1.3.0");
+      }
       expect(manifest.publishConfig?.access).toBe("public");
     }
   });

@@ -1,4 +1,4 @@
-import { createDatabaseClient } from "@alesha-nov/config";
+import { createDatabaseClient } from "@alesha-nov/db";
 import type { AuthUser, UserRow } from "./types";
 
 export async function getUserRolesInternal(

@@ -6,7 +6,7 @@ const sqlTag = (() => {
   return Promise.resolve(queue.shift() ?? []);
 }) as unknown as (strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>;
 
-mock.module("@alesha-nov/config", () => ({
+mock.module("@alesha-nov/db", () => ({
   createDatabaseClient: () => ({ sql: sqlTag }),
 }));
 
