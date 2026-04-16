@@ -55,8 +55,16 @@ jobs:
 
           while IFS= read -r file; do
             if [[ "$file" == packages/*/package.json ]]; then
-              echo "ERROR: Manual edit to $file detected. Package versions should only be changed via changesets!"
-              exit 1
+              status="$(git diff --name-status "$base_sha" "$head_sha" -- "$file" | awk '{print $1}')"
+
+              if [[ "$status" == "A" ]]; then
+                continue
+              fi
+
+              if git diff "$base_sha" "$head_sha" -- "$file" | grep -Eq '^[+-][[:space:]]*"version"[[:space:]]*:'; then
+                echo "ERROR: Manual version edit to $file detected. Package versions should only be changed via changesets!"
+                exit 1
+              fi
             fi
           done < <(git diff --name-only "$base_sha" "$head_sha")
 
