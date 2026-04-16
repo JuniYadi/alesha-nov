@@ -1,5 +1,11 @@
 # @alesha-nov/db
 
+## 0.2.1
+
+### Patch Changes
+
+- 33cf861: Avoid exposing Bun SQL internals in client-capable code paths by resolving Bun DB access at runtime and keeping the auth route handler inside a server-only boundary.
+
 ## 0.2.0
 
 ### Minor Changes

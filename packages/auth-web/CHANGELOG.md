@@ -1,5 +1,11 @@
 # @alesha-nov/auth-web
 
+## 0.2.3
+
+### Patch Changes
+
+- @alesha-nov/auth@0.2.3
+
 ## 0.2.2
 
 ### Patch Changes
