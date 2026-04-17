@@ -29,15 +29,24 @@ export default function Header() {
           <Link to="/" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
             Home
           </Link>
-          <Link to="/signup" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
-            Signup
+          <Link to="/api" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+            API
           </Link>
-          <Link to="/login" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
-            Login
-          </Link>
-          <Link to="/dashboard" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
-            Dashboard
-          </Link>
+          {status !== 'authenticated' && (
+            <>
+              <Link to="/signup" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                Signup
+              </Link>
+              <Link to="/login" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                Login
+              </Link>
+            </>
+          )}
+          {status === 'authenticated' && (
+            <Link to="/dashboard" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+              Dashboard
+            </Link>
+          )}
         </div>
       </nav>
     </header>

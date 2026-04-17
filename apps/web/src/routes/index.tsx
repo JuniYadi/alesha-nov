@@ -24,6 +24,9 @@ function HomePage() {
           <Link to="/login" className="rounded-full border border-[rgba(23,58,64,0.2)] bg-white/50 px-5 py-2.5 text-sm font-semibold text-[var(--sea-ink)] no-underline">
             Go to Login
           </Link>
+          <Link to="/api" className="rounded-full border border-[rgba(23,58,64,0.2)] bg-white/50 px-5 py-2.5 text-sm font-semibold text-[var(--sea-ink)] no-underline">
+            API Playground
+          </Link>
           <Link to="/dashboard" className="rounded-full border border-[rgba(23,58,64,0.2)] bg-white/50 px-5 py-2.5 text-sm font-semibold text-[var(--sea-ink)] no-underline">
             Open Dashboard
           </Link>
