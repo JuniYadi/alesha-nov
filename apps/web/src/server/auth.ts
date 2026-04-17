@@ -6,23 +6,17 @@ import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
 import { resolveSecureCookie, resolveSessionSecret } from './auth-config'
 
-console.log('[DEBUG] auth.ts module loaded. DB_TYPE:', process.env.DB_TYPE, '| DATABASE_URL:', process.env.DATABASE_URL)
-
 function resolveDbType(): 'mysql' | 'postgresql' | 'sqlite' {
   const raw = process.env.DB_TYPE?.toLowerCase()
-  console.log('[DEBUG] resolveDbType() → raw:', raw)
   if (raw === 'mysql' || raw === 'postgresql' || raw === 'sqlite') return raw
   if (raw === 'postgres') return 'postgresql'
   return 'sqlite'
 }
 
 async function buildHandler() {
-  const dbType = resolveDbType()
-  const dbUrl = process.env.DATABASE_URL ?? ':memory:'
-  console.log('[DEBUG] buildHandler() → type:', dbType, 'url:', dbUrl)
   const dbConfig = {
-    type: dbType,
-    url: dbUrl,
+    type: resolveDbType(),
+    url: process.env.DATABASE_URL ?? ':memory:',
   }
 
   const dbClient = createDatabaseClient(dbConfig)
