@@ -191,7 +191,7 @@ export function useMagicLinkRequest(config: AuthApiConfig = {}) {
       setError(null);
       setSent(false);
       try {
-        await postJson<{ token: string }>("/magic-link/request", input, config);
+        await postJson<{ sent: boolean }>("/magic-link/request", input, config);
         setSent(true);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Magic link request failed";
