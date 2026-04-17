@@ -1,5 +1,11 @@
 # @alesha-nov/db
 
+## 0.2.2
+
+### Patch Changes
+
+- 490bc68: Fix SQLite connection by prefixing `sqlite://` scheme to file paths for Bun.SQL
+
 ## 0.2.1
 
 ### Patch Changes
