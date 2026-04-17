@@ -40,13 +40,24 @@ App runs on port `3000` by default.
 
 ## Environment
 
+Use `.env.example` as a base:
+
+```bash
+cd apps/web
+cp .env.example .env
+```
+
 Minimum for meaningful auth run:
 
 - `DB_TYPE` (`mysql|postgresql|sqlite`)
 - `DATABASE_URL`
 - `SESSION_SECRET`
+- `AUTH_SECURE_COOKIE` (optional, defaults to `true` in production)
 
-Current server defaults are demo-friendly (e.g., fallback secret / insecure cookie). Harden before production.
+Current server defaults are demo-friendly (fallback secret / insecure cookie).
+`apps/web/.env.example` contains a safe local starter profile.
+
+For production, replace insecure defaults and set `NODE_ENV=production`.
 
 ## Docker (from monorepo root)
 
