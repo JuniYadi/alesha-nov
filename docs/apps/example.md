@@ -80,7 +80,7 @@ bun run --filter web dev
 For a persistent SQLite database instead of in-memory:
 
 ```bash
-DATABASE_URL=./dev.db DB_TYPE=sqlite bun run --filter web dev
+DATABASE_URL=./data/alesha.db DB_TYPE=sqlite bun run --filter web dev
 ```
 
 For MySQL:
@@ -95,13 +95,15 @@ DATABASE_URL=mysql://user:pass@localhost:3306/mydb DB_TYPE=mysql \
 | Path | Auth Required | Description |
 |------|-------------|-------------|
 | `/` | No | Home — shows current auth status |
-| `/signup` | No | Create account |
-| `/login` | No | Login (email/password or magic link) |
+| `/api` | No | API Playground — test all /auth/* endpoints from browser UI |
+| `/signup` | Redirect if auth | Create account (redirects to `/dashboard` if already logged in) |
+| `/login` | Redirect if auth | Login (email/password or magic link) (redirects to `/dashboard` if already logged in) |
 | `/dashboard` | Yes | Protected page; redirects to `/login` if unauthenticated |
 | `/auth/signup` | No | `POST` — create account |
 | `/auth/login` | No | `POST` — email+password login |
 | `/auth/logout` | No | `POST` — clear session |
 | `/auth/session` | No | `GET` — current session info |
+| `/auth/me` | Yes | `GET` — current user info |
 | `/auth/magic-link/request` | No | `POST` — issue magic link token |
 | `/auth/magic-link/verify` | No | `POST` — verify magic link token |
 
@@ -127,6 +129,18 @@ Protected route example (`dashboard.tsx`):
   </section>
 </AuthGuard>
 ```
+
+## Auth Route Guards
+
+The demo app implements server-side route protection using TanStack Router's `beforeLoad` hook:
+
+- **`/dashboard`** — `beforeLoad` calls `getServerSessionOrNull()`. If no session, throws `redirect({ to: '/login', search: { redirect: location.href } })`.
+- **`/login`** — `beforeLoad` calls `getServerSessionOrNull()`. If session exists, redirects to `/dashboard`.
+- **`/signup`** — `beforeLoad` calls `getServerSessionOrNull()`. If session exists, redirects to `/dashboard`.
+
+This pattern ensures auth redirects work even when JavaScript is disabled (SSR-compatible).
+
+See [API Reference](api) for complete HTTP API documentation with curl examples.
 
 ## CI / Lint / Test
 
