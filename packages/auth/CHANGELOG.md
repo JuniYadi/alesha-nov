@@ -1,5 +1,12 @@
 # @alesha-nov/auth
 
+## 0.2.4
+
+### Patch Changes
+
+- 1278ea7: Fix `/auth/me` flow by allowing callers to inject a shared database client into
+  `createAuthService` and wiring a `getUser` lookup in the web auth handler.
+
 ## 0.2.3
 
 ### Patch Changes
