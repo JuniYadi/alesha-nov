@@ -1,5 +1,11 @@
 # @alesha-nov/auth
 
+## 0.2.6
+
+### Patch Changes
+
+- 8a2c4be: Fix magic link: API no longer returns token, email delivery handled by package
+
 ## 0.2.5
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @alesha-nov/auth-react
 
+## 0.3.1
+
+### Patch Changes
+
+- 8a2c4be: Fix magic link: API no longer returns token, email delivery handled by package
+
 ## 0.3.0
 
 ### Minor Changes
