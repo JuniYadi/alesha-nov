@@ -1,6 +1,7 @@
 import '@tanstack/react-start/server-only'
 
-import { createAuthService } from '@alesha-nov/auth'
+import { createDatabaseClient } from '@alesha-nov/db'
+import { createAuthService, getUserById } from '@alesha-nov/auth'
 import { getSessionFromRequest, type AuthSession } from '@alesha-nov/auth-web'
 import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
 import { resolveSecureCookie, resolveSessionSecret } from './auth-config'
@@ -13,16 +14,20 @@ function resolveDbType(): 'mysql' | 'postgresql' | 'sqlite' {
 }
 
 async function buildHandler() {
-  const authService = await createAuthService({
+  const dbConfig = {
     type: resolveDbType(),
     url: process.env.DATABASE_URL ?? ':memory:',
-  })
+  }
+
+  const dbClient = createDatabaseClient(dbConfig)
+  const authService = await createAuthService(dbConfig, {}, dbClient)
 
   return createTanstackAuthHandler({
     authService,
     basePath: '/auth',
     secureCookie: resolveSecureCookie(),
     sessionSecret: resolveSessionSecret(),
+    getUser: (userId) => getUserById(dbClient, userId),
   })
 }
 

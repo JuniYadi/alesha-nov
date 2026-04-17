@@ -240,8 +240,12 @@ function clearLoginFailures(loginAttempts: Map<string, LoginAttemptState>, key: 
   loginAttempts.delete(key);
 }
 
-export async function createAuthService(dbConfig: DBConfig, options: AuthServiceOptions = {}): Promise<AuthService> {
-  const client = createDatabaseClient(dbConfig);
+export async function createAuthService(
+  dbConfig: DBConfig,
+  options: AuthServiceOptions = {},
+  providedClient?: ReturnType<typeof createDatabaseClient>,
+): Promise<AuthService> {
+  const client = providedClient ?? createDatabaseClient(dbConfig);
   await runMigrations(client, authMigrations);
 
   const passwordPolicyValidator = options.passwordPolicyValidator ?? defaultPasswordPolicyValidator;
