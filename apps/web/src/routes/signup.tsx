@@ -1,8 +1,17 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useSignup } from '@alesha-nov/auth-react'
+import { getServerSessionOrNull } from '../server/session'
 
-export const Route = createFileRoute('/signup')({ component: SignupPage })
+export const Route = createFileRoute('/signup')({
+  beforeLoad: async () => {
+    const session = await getServerSessionOrNull()
+    if (session) {
+      throw redirect({ to: '/dashboard' })
+    }
+  },
+  component: SignupPage,
+})
 
 function SignupPage() {
   const { signup, loading, error, data } = useSignup({ basePath: '/auth' })
