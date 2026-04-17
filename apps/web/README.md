@@ -76,3 +76,35 @@ docker run --rm -p 3000:3000 \
 - Fail fast when `SESSION_SECRET` is missing
 - Use secure cookie settings in production
 - Replace demo magic-link UX with real email delivery flow
+
+## Testing
+
+### Unit & Integration Tests
+
+```bash
+bun run test
+```
+
+Test coverage:
+- `@alesha-nov/auth-web`: HTTP-level auth API tests (signup, login, magic-link, session, OAuth, roles, CORS)
+- `@alesha-nov/auth-react`: Hook and context tests
+- `apps/web`: Route guard tests, smoke tests
+
+### E2E Tests
+
+E2E tests use Playwright with Chromium. See [E2E-TESTING.md](./E2E-TESTING.md) for full checklist.
+
+**Covered by E2E tests (26 tests):**
+- Home page rendering and auth status display
+- Signup page form and account creation
+- Login page with email/password and magic-link
+- Dashboard protected route behavior
+- Theme toggle functionality (light/dark/auto)
+- Navigation links and active state
+
+**To run E2E tests:**
+```bash
+bun run test:e2e
+bun run test:e2e:ui      # Interactive UI mode
+bun run test:e2e:headed  # See browser while testing
+```
