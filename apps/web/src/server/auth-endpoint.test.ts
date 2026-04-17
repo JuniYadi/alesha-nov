@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto'
 
 const ORIGINAL_ENV = { ...process.env }
 
+const hasBunSql =
+  typeof (globalThis as { Bun?: { sql?: unknown } }).Bun?.sql === 'function'
+
 type HttpRequestInit = Omit<RequestInit, 'body'> & {
   body?: string
 }
@@ -23,6 +26,8 @@ function authJsonRequest(path: string, init: HttpRequestInit): Request {
 }
 
 describe('auth endpoint integration', () => {
+  const testIfBun = hasBunSql ? test : test.skip
+
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV }
     vi.resetModules()
@@ -38,7 +43,7 @@ describe('auth endpoint integration', () => {
     process.env = { ...ORIGINAL_ENV }
   })
 
-  test('returns 200 and user payload for GET /auth/me after login', async () => {
+  testIfBun('returns 200 and user payload for GET /auth/me after login', async () => {
     const unique = randomUUID()
     const email = `issue96-${unique}@example.com`
     const password = 'Passw0rd!'
