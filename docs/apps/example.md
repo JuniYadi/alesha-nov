@@ -80,7 +80,7 @@ bun run --filter web dev
 For a persistent SQLite database instead of in-memory:
 
 ```bash
-DATABASE_URL=./data/alesha.db DB_TYPE=sqlite bun run --filter web dev
+DATABASE_URL=./alesha.sqlite DB_TYPE=sqlite bun run --filter web dev
 ```
 
 For MySQL:
