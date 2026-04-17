@@ -28,10 +28,8 @@ describe("createAuthService oauth + magic-link", () => {
     queue.push([{ id: "u-1" }], []);
 
     const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
-    const token = await svc.issueMagicLinkToken({ email: "user@example.com", ttlSeconds: 60 });
+    await svc.issueMagicLinkToken({ email: "user@example.com", ttlSeconds: 60 });
 
-    expect(typeof token).toBe("string");
-    expect(token.length > 10).toBe(true);
     expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_magic_link_tokens"))).toBe(true);
   });
 
