@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@alesha-nov/auth": "workspace:*",
+    "@alesha-nov/db": "workspace:*",
     "@alesha-nov/auth-react": "workspace:*",
     "@alesha-nov/auth-web": "workspace:*",
     "@alesha-nov/config": "workspace:*",
