@@ -1,5 +1,13 @@
 # web
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [1278ea7]
+  - @alesha-nov/auth@0.2.4
+  - @alesha-nov/auth-web@0.2.4
+
 ## 0.1.5
 
 ### Patch Changes
