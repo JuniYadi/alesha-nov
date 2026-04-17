@@ -334,7 +334,7 @@ function ApiPage() {
                   </div>
                   <div className="mt-3 space-y-2">
                     <p className="text-xs font-semibold text-[var(--sea-ink-soft)]">Example Responses</p>
-                    <ExampleResponse label="Token issued" status={200} body={{ token: 'ml_a1b2c3d4e5f6' }} />
+                    <ExampleResponse label="Email sent" status={200} body={{ sent: true }} />
                     <ExampleResponse label="Rate limited" status={429} body={{ error: 'Too many requests' }} />
                   </div>
                 </div>
