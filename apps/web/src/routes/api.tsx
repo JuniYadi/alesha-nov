@@ -157,7 +157,7 @@ function ApiPage() {
               <div className="mt-2 flex gap-2">
                 <button
                   className="rounded border px-3 py-1.5 text-sm hover:bg-[var(--chip-bg)]"
-                  onClick={() => handleRequest('session', 'GET', '/session', undefined, (r) => { setSessionStatus(r.status); setSession(r.body as any) })}
+                  onClick={() => handleRequest('session', 'GET', '/session', undefined, (r) => { setSessionStatus(r.status); setSession(r.body) })}
                   disabled={loading}
                 >
                   Refresh Session
@@ -302,7 +302,7 @@ function ApiPage() {
             <div className="space-y-2">
               <button
                 className="rounded-md border px-4 py-2 text-sm hover:bg-[var(--chip-bg)] disabled:opacity-50"
-                onClick={() => handleRequest('session', 'GET', '/session', undefined, (r) => { setSessionStatus(r.status); setSession(r.body as any) })}
+                onClick={() => handleRequest('session', 'GET', '/session', undefined, (r) => { setSessionStatus(r.status); setSession(r.body) })}
                 disabled={loading}
               >
                 {loading ? 'Fetching...' : 'Send GET /auth/session'}
