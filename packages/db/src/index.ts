@@ -53,8 +53,12 @@ export function createDatabaseClient(config: DBConfig): DatabaseClient {
     throw new Error("Bun SQL runtime is not callable. Check the Bun environment version.");
   }
 
+  const resolvedUrl = config.type === "sqlite" && !config.url.startsWith("sqlite:") && config.url !== ":memory:"
+    ? `sqlite://${config.url}`
+    : config.url;
+
   const sql = new (SQLCtor as new (url: string, options?: { max?: number }) => SQL)(
-    config.url,
+    resolvedUrl,
     {
       max: config.maxConnections ?? 10,
     }
