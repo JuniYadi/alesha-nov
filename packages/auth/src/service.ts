@@ -478,8 +478,6 @@ export async function createAuthService(
         ttlSeconds,
         expiresAt,
       });
-
-      return rawToken;
     },
 
     async verifyMagicLinkToken(token: string) {

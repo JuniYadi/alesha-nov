@@ -521,12 +521,12 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
         const body = await safeJson<{ email: string; ttlSeconds?: number }>(request);
-        const token = await options.authService.issueMagicLinkToken({
+        await options.authService.issueMagicLinkToken({
           email: body.email,
           ttlSeconds: body.ttlSeconds,
         });
 
-        return json(200, { token }, responseCorsHeaders);
+        return json(200, { sent: true }, responseCorsHeaders);
       }
 
       if (method === "POST" && subPath === "/magic-link/verify") {

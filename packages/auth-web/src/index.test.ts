@@ -27,7 +27,7 @@ const makeAuthService = () => ({
     }
     return null;
   },
-  issueMagicLinkToken: async () => "magic-token",
+  issueMagicLinkToken: (() => {}) as unknown as (input: { email: string; ttlSeconds?: number }) => Promise<void>,
   issuePasswordResetToken: async ({ email }: { email: string }) => {
     if (email === "missing@example.com") throw new Error("User not found");
     return "reset-token";
@@ -412,13 +412,12 @@ describe("POST /sessions/revoke-all", () => {
 });
 
 describe("POST /magic-link/request", () => {
-  test("calls issueMagicLinkToken and returns 200 with token", async () => {
+  test("calls issueMagicLinkToken and returns 200 with sent: true", async () => {
     let called = false;
     const customService = makeAuthService();
     customService.issueMagicLinkToken = async ({ email }: { email: string }) => {
       called = true;
       expect(email).toBe("user@example.com");
-      return "request-token";
     };
 
     const app = createAuthWeb({
@@ -437,8 +436,8 @@ describe("POST /magic-link/request", () => {
 
     expect(response.status).toBe(200);
     expect(called).toBe(true);
-    const body = (await response.json()) as { token: string };
-    expect(body.token).toBe("request-token");
+    const body = (await response.json()) as { sent: boolean };
+    expect(body.sent).toBe(true);
   });
 });
 

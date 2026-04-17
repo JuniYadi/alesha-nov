@@ -216,7 +216,7 @@ export interface AuthService {
   validateOAuthCallback(input: OAuthCallbackValidationInput): OAuthCallbackValidationResult;
   issueSession(userId: string): Promise<AuthSession>;
   refreshSession(refreshToken: string): Promise<AuthSession | null>;
-  issueMagicLinkToken(input: MagicLinkInput): Promise<string>;
+  issueMagicLinkToken(input: MagicLinkInput): Promise<void>;
   verifyMagicLinkToken(token: string): Promise<AuthUser | null>;
   issuePasswordResetToken(input: PasswordResetInput): Promise<string>;
   resetPassword(input: ResetPasswordInput): Promise<boolean>;
