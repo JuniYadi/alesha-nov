@@ -1,5 +1,13 @@
 # @alesha-nov/auth-web
 
+## 0.2.6
+
+### Patch Changes
+
+- 8a2c4be: Fix magic link: API no longer returns token, email delivery handled by package
+- Updated dependencies [8a2c4be]
+  - @alesha-nov/auth@0.2.6
+
 ## 0.2.5
 
 ### Patch Changes

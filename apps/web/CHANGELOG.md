@@ -1,5 +1,14 @@
 # web
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [8a2c4be]
+  - @alesha-nov/auth@0.2.6
+  - @alesha-nov/auth-web@0.2.6
+  - @alesha-nov/auth-react@0.3.1
+
 ## 0.1.7
 
 ### Patch Changes
