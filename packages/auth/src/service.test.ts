@@ -55,11 +55,13 @@ describe("createAuthService", () => {
     expect(result).toBeNull();
   });
 
-  test("issueMagicLinkToken throws when user does not exist", async () => {
+  test("issueMagicLinkToken creates user when missing", async () => {
     queue.push([]);
     const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
 
-    await expect(svc.issueMagicLinkToken({ email: "missing@example.com" })).rejects.toThrow("User not found");
+    await expect(svc.issueMagicLinkToken({ email: "missing@example.com" })).resolves.toBeUndefined();
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_users"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_magic_link_tokens"))).toBe(true);
   });
 
   test("issueMagicLinkToken auto-delivers email when provider is configured", async () => {
