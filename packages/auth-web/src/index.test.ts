@@ -1,5 +1,38 @@
 import { describe, expect, test } from "bun:test";
 import { createAuthWeb, getSessionFromRequest, revokeAllUserTokens, revokeSession, type RateLimiter } from "./index";
+import { createHmac } from "node:crypto";
+
+function base64url(value: string): string {
+  return Buffer.from(value, "utf-8")
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function signJwt(payload: string, secret: string): string {
+  return createHmac("sha256", secret).update(payload).digest("base64url");
+}
+
+function buildJwt(parts: {
+  userId: string;
+  email: string;
+  roles: string[];
+  expSeconds: number;
+  secret: string;
+}): string {
+  const header = base64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+  const payload = base64url(
+    JSON.stringify({
+      sub: parts.userId,
+      email: parts.email,
+      roles: parts.roles,
+      exp: parts.expSeconds,
+    }),
+  );
+  const signature = signJwt(`${header}.${payload}`, parts.secret);
+  return `${header}.${payload}.${signature}`;
+}
 
 const makeAuthService = () => ({
   signup: async (input: { email: string; name?: string; image?: string; roles?: string[] }) => ({
@@ -206,6 +239,59 @@ describe("createAuthWeb", () => {
     );
 
     expect(response.status).toBe(403);
+    expect((await response.json()).error).toBe("Insufficient permissions");
+  });
+
+  test("roles endpoint allows cross-user update with support.write permission", async () => {
+    const privilegedService = makeAuthService();
+    privilegedService.login = async (input: { email: string }) => {
+      if (input.email === "priv@example.com") {
+        return {
+          id: "u-2",
+          email: "priv@example.com",
+          passwordHash: "hashed",
+          name: "Priv",
+          image: null,
+          emailVerifiedAt: null,
+          roles: ["support.write"],
+          createdAt: "2024-01-01T00:00:00.000Z",
+        };
+      }
+
+      return null;
+    };
+
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: privilegedService,
+      secureCookie: false,
+    });
+
+    const loginResponse = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "priv@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+
+    const response = await app.handleRequest(
+      new Request("http://localhost/auth/roles", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json",
+          cookie,
+        },
+        body: JSON.stringify({ userId: "someone-else", roles: ["billing.write"] }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { userId: string; roles: string[] };
+    expect(body.userId).toBe("someone-else");
+    expect(body.roles).toEqual(["billing.write"]);
   });
 
   test("safeJson error path returns 400", async () => {
@@ -230,6 +316,71 @@ describe("getSessionFromRequest", () => {
   test("returns null when cookie is missing", async () => {
     const session = await getSessionFromRequest(new Request("http://localhost/auth/session"), "0123456789abcdef");
     expect(session).toBeNull();
+  });
+
+  test("reads valid Bearer token from Authorization header", async () => {
+    const sessionPayload = {
+      userId: "jwt-user",
+      email: "jwt@example.com",
+      roles: ["admin"],
+      expSeconds: Math.floor(Date.now() / 1000) + 3600,
+    };
+
+    const jwt = buildJwt({
+      userId: sessionPayload.userId,
+      email: sessionPayload.email,
+      roles: sessionPayload.roles,
+      expSeconds: sessionPayload.expSeconds,
+      secret: "0123456789abcdef",
+    });
+
+    const session = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", {
+        headers: {
+          authorization: `Bearer ${jwt}`,
+        },
+      }),
+      "0123456789abcdef",
+    );
+
+    expect(session).toEqual({
+      userId: "jwt-user",
+      email: "jwt@example.com",
+      roles: ["admin"],
+      exp: sessionPayload.expSeconds,
+      sessionId: expect.any(String),
+    });
+  });
+
+  test("falls back to cookie when Authorization header is absent", async () => {
+    const app = createAuthWeb({
+      sessionSecret: "0123456789abcdef",
+      authService: makeAuthService(),
+      secureCookie: false,
+    });
+
+    const loginResponse = await app.handleRequest(
+      new Request("http://localhost/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: "ok@example.com", password: "x" }),
+      })
+    );
+
+    const cookie = loginResponse.headers.get("set-cookie") ?? "";
+    const token = cookie.split(";")[0]?.split("=")[1] ?? "";
+    expect(token).not.toBe("");
+
+    const session = await getSessionFromRequest(
+      new Request("http://localhost/auth/session", {
+        headers: {
+          cookie: `alesha_auth=${token}`,
+        },
+      }),
+      "0123456789abcdef",
+    );
+
+    expect(session).toMatchObject({ userId: "u-1", email: "ok@example.com", roles: ["admin"] });
   });
 });
 

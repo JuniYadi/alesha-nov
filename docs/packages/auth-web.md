@@ -106,11 +106,12 @@ POST /auth/logout
 
 ### GET /auth/session
 
-Get current session (requires valid cookie).
+Get current session (requires valid session).
 
 ```http
 GET /auth/session
 Cookie: alesha_auth=...
+Authorization: Bearer <token>
 ```
 
 **Response (200):**
@@ -200,7 +201,16 @@ Cookie: alesha_auth=...
 
 ### PUT /auth/roles
 
-Update roles for a user. Requires `support.write` or `billing.write` role to update other users.
+Update roles for a user.
+
+- Update your own roles: requires `roles:write` permission.
+- Update another user's roles: requires `roles:write:any` permission.
+
+Built-in role mapping currently resolves:
+
+- `admin` -> `roles:write`
+- `support.write` -> `roles:write`, `roles:write:any`
+- `billing.write` -> `roles:write`, `roles:write:any`
 
 ```http
 PUT /auth/roles
@@ -232,6 +242,13 @@ const session = await getSessionFromRequest(request, sessionSecret, cookieName);
 // → AuthSession | null
 ```
 
+`getSessionFromRequest` reads token from either `Cookie` or `Authorization: Bearer`.
+
 ## Session Token Format
 
-The session token is a signed JWT-like structure: `{b64url(payload)}.{b64url(signature)}`, signed with HMAC-SHA256 using the `sessionSecret`. The payload contains the `AuthSession` object.
+The session token supports two formats:
+
+1) Internal format: `{b64url(payload)}.{b64url(signature)}`
+2) Standard JWT-like format: `{b64url(header)}.{b64url(payload)}.{b64url(signature)}`
+
+Both use HMAC-SHA256, `sessionSecret`, and the same expiry semantics.

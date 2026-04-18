@@ -320,12 +320,23 @@ curl -b "alesha_auth=<token>" http://172.25.131.143:3000/auth/linked-accounts
 
 ### PUT /auth/roles
 
-Update roles for a user. Requires session with `support.write` or `billing.write` role to update other users.
+Update roles for a user.
+
+Permission checks:
+
+- Own-user updates require `roles:write`.
+- Cross-user updates require `roles:write:any`.
 
 ```bash
 curl -X PUT http://172.25.131.143:3000/auth/roles \
   -H "Content-Type: application/json" \
   -b "alesha_auth=<token>" \
+  -d '{"userId":"01921abc-...","roles":["user","support.read"]}'
+
+# or (Bearer token)
+curl -X PUT http://172.25.131.143:3000/auth/roles \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
   -d '{"userId":"01921abc-...","roles":["user","support.read"]}'
 ```
 

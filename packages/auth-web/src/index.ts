@@ -117,6 +117,39 @@ function hashToken(token: string): string {
   return Buffer.from(token, "utf-8").toString("hex");
 }
 
+const ROLE_PERMISSION_MAP: Record<string, string[]> = {
+  admin: ["roles:write"],
+  "support.write": ["roles:write", "roles:write:any"],
+  "billing.write": ["roles:write", "roles:write:any"],
+};
+
+function derivePermissionsFromRoles(roles: string[]): string[] {
+  const permissions = new Set<string>();
+
+  for (const role of roles) {
+    const mapped = ROLE_PERMISSION_MAP[role] ?? [role];
+    for (const permission of mapped) {
+      permissions.add(permission);
+    }
+  }
+
+  return [...permissions];
+}
+
+function hasPermission(roles: string[], requiredPermission: string): boolean {
+  if (roles.includes("*") || roles.includes("*:") || roles.includes("*:*")) {
+    return true;
+  }
+
+  const permissions = derivePermissionsFromRoles(roles);
+  const exact = permissions.includes(requiredPermission);
+  if (exact) return true;
+
+  return permissions.some((permission) =>
+    permission.startsWith(`${requiredPermission}:`) || permission === "*"
+  );
+}
+
 function createSessionToken(session: AuthSession, secret: string): string {
   const payload = b64url(JSON.stringify(session));
   const sig = sign(payload, secret);
@@ -124,22 +157,93 @@ function createSessionToken(session: AuthSession, secret: string): string {
 }
 
 function verifySessionToken(token: string, secret: string): AuthSession | null {
-  const [payload, sig] = token.split(".");
-  if (!payload || !sig) return null;
+  const nowSeconds = Math.floor(Date.now() / 1000);
 
-  const expectedSig = sign(payload, secret);
-  const sigOk = timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig));
-  if (!sigOk) return null;
+  const parts = token.split(".");
+  if (parts.length === 2) {
+    const [payloadB64, sigB64] = parts;
+    if (!payloadB64 || !sigB64) return null;
 
-  const parsed = JSON.parse(b64urlDecode(payload)) as AuthSession;
-  if (!parsed.exp || parsed.exp < Math.floor(Date.now() / 1000)) return null;
+    const expectedSig = sign(payloadB64, secret);
+    const sigOk = timingSafeEqual(Buffer.from(sigB64), Buffer.from(expectedSig));
+    if (!sigOk) return null;
 
-  // Check revocation list
-  const tokenHash = hashToken(token);
-  const revokedAt = revokedSessions.get(tokenHash);
-  if (revokedAt !== undefined) return null;
+    let payload: AuthSession;
+    try {
+      payload = JSON.parse(b64urlDecode(payloadB64)) as AuthSession;
+    } catch {
+      return null;
+    }
 
-  return parsed;
+    if (!payload.exp || payload.exp < nowSeconds) return null;
+
+    const tokenHash = hashToken(token);
+    if (revokedSessions.has(tokenHash)) return null;
+
+    return payload;
+  }
+
+  if (parts.length === 3) {
+    const [headerB64, payloadB64, sigB64] = parts;
+    if (!headerB64 || !payloadB64 || !sigB64) return null;
+
+    const expectedSig = sign(`${headerB64}.${payloadB64}`, secret);
+    const sigOk = timingSafeEqual(Buffer.from(sigB64), Buffer.from(expectedSig));
+    if (!sigOk) return null;
+
+    let header: { alg?: string };
+    try {
+      header = JSON.parse(b64urlDecode(headerB64)) as { alg?: string };
+    } catch {
+      return null;
+    }
+
+    if (header.alg && header.alg !== "HS256") return null;
+
+    let payload: {
+      sub?: string;
+      email?: string;
+      roles?: unknown;
+      exp?: number;
+      sessionId?: string;
+      iat?: number;
+    };
+    try {
+      payload = JSON.parse(b64urlDecode(payloadB64));
+    } catch {
+      return null;
+    }
+
+    const exp = Number(payload.exp);
+    if (!Number.isFinite(exp) || exp < nowSeconds) return null;
+
+    if (!payload.sub || typeof payload.sub !== "string") return null;
+    if (!payload.email || typeof payload.email !== "string") return null;
+    if (payload.roles !== undefined && !Array.isArray(payload.roles)) return null;
+
+    const roles =
+      payload.roles === undefined
+        ? []
+        : payload.roles.map((role) => String(role));
+
+    const tokenHash = hashToken(token);
+    if (revokedSessions.has(tokenHash)) return null;
+
+    return {
+      userId: payload.sub,
+      email: payload.email,
+      roles,
+      exp,
+      sessionId: payload.sessionId ?? `${payload.sub}:${iatFallback(exp, payload.iat)}`,
+    };
+  }
+
+  return null;
+}
+
+function iatFallback(exp: number, iat: unknown): string {
+  if (typeof iat === "number" && iat > 0) return String(iat);
+  return String(exp);
 }
 
 export function revokeSession(token: string): void {
@@ -373,9 +477,16 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
 
   function getSessionFromRequest(request: Request): AuthSession | null {
     const cookies = parseCookies(request);
-    const token = cookies[cookieName];
-    if (!token) return null;
-    return verifySessionToken(token, options.sessionSecret);
+    const cookieToken = cookies[cookieName];
+    if (cookieToken) return verifySessionToken(cookieToken, options.sessionSecret);
+
+    const authHeader = request.headers.get("authorization");
+    const authToken = authHeader?.trim().startsWith("Bearer ")
+      ? authHeader.trim().slice(7).trim()
+      : null;
+
+    if (!authToken) return null;
+    return verifySessionToken(authToken, options.sessionSecret);
   }
 
   async function authenticateFromSession(request: Request): Promise<AuthSession> {
@@ -787,8 +898,12 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         const body = await safeJson<{ userId?: string; roles: string[] }>(request);
         const targetUserId = body.userId ?? current.userId;
 
-        if (targetUserId !== current.userId && !current.roles.includes("support.write") && !current.roles.includes("billing.write")) {
-          return json(403, { error: "Forbidden" }, responseCorsHeaders);
+        if (!hasPermission(current.roles, "roles:write")) {
+          return json(403, { error: "Insufficient permissions" }, responseCorsHeaders);
+        }
+
+        if (targetUserId !== current.userId && !hasPermission(current.roles, "roles:write:any")) {
+          return json(403, { error: "Insufficient permissions" }, responseCorsHeaders);
         }
 
         const roles = await options.authService.setUserRoles(targetUserId, body.roles ?? []);
@@ -810,7 +925,15 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
 
 export async function getSessionFromRequest(request: Request, sessionSecret: string, cookieName = "alesha_auth"): Promise<AuthSession | null> {
   const cookies = parseCookies(request);
-  const token = cookies[cookieName];
-  if (!token) return null;
-  return verifySessionToken(token, sessionSecret);
+  const cookieToken = cookies[cookieName];
+  if (cookieToken) {
+    const cookieSession = verifySessionToken(cookieToken, sessionSecret);
+    if (cookieSession) return cookieSession;
+  }
+
+  const authHeader = request.headers.get("authorization");
+  const authToken = authHeader?.trim().startsWith("Bearer ") ? authHeader.trim().slice(7).trim() : null;
+  if (!authToken) return null;
+
+  return verifySessionToken(authToken, sessionSecret);
 }
