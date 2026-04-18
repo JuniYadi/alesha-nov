@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  resolveAppConfig,
   resolveEmailTransportConfig,
   resolveJWTSecret,
   resolveMagicLinkConfig,
@@ -44,6 +45,11 @@ const ENV_KEYS = [
   "EMAIL_SMTP_USERNAME",
   "AUTH_EMAIL_SMTP_PASSWORD",
   "EMAIL_SMTP_PASSWORD",
+  "APP_ENV",
+  "NODE_ENV",
+  "APP_URL",
+  "APP_DEBUG",
+  "APP_TIMEZONE",
 ] as const;
 
 afterEach(() => {
@@ -277,5 +283,49 @@ describe("resolveOAuthConfig", () => {
   test("throws when provider config is incomplete", () => {
     process.env.AUTH_OAUTH_GITHUB_CLIENT_ID = "github-id";
     expect(() => resolveOAuthConfig()).toThrow("Incomplete github OAuth env");
+  });
+});
+
+describe("resolveAppConfig", () => {
+  test("returns defaults when app env is missing", () => {
+    expect(resolveAppConfig()).toEqual({
+      env: "development",
+      url: "http://localhost:3000",
+      debug: true,
+      timezone: "UTC",
+    });
+  });
+
+  test("reads app env and url from explicit vars", () => {
+    process.env.APP_ENV = "production";
+    process.env.APP_URL = "https://app.example.test";
+    process.env.APP_DEBUG = "false";
+    process.env.APP_TIMEZONE = "Asia/Jakarta";
+
+    expect(resolveAppConfig()).toEqual({
+      env: "production",
+      url: "https://app.example.test",
+      debug: false,
+      timezone: "Asia/Jakarta",
+    });
+  });
+
+  test("falls back to NODE_ENV when APP_ENV is missing", () => {
+    process.env.NODE_ENV = "test";
+
+    expect(resolveAppConfig()).toMatchObject({
+      env: "test",
+      debug: false,
+    });
+  });
+
+  test("throws when APP_ENV value is invalid", () => {
+    process.env.APP_ENV = "staging";
+    expect(() => resolveAppConfig()).toThrow("Invalid APP_ENV/NODE_ENV");
+  });
+
+  test("throws when APP_DEBUG is invalid", () => {
+    process.env.APP_DEBUG = "yes";
+    expect(() => resolveAppConfig()).toThrow("Invalid app debug");
   });
 });
