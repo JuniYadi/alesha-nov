@@ -14,7 +14,8 @@
     "test:coverage": "bun test --coverage --coverage-reporter=lcov",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "opencode:pr": "bash ./scripts/opencode-pr.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",

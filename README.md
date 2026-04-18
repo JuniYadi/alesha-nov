@@ -26,6 +26,41 @@ bun run lint
 bun run test
 ```
 
+## Opencode one-command workflow
+
+Use this command for the full repeatable quality flow from one branch:
+
+```bash
+./scripts/opencode-pr.sh <branch-name> "<PR title>"
+```
+
+What it does:
+
+- Runs lint on all workspace packages and retries with `--fix` when needed.
+- Runs package tests with coverage collection, then validates that all source lines are covered.
+- Creates a `.changeset/*.md` automatically when package directories changed.
+- Commits package/app/changeset edits in separate commits.
+- Pushes the new branch to `origin` and opens a PR via `gh pr create`.
+
+Example:
+
+```bash
+./scripts/opencode-pr.sh chore/cleanup-auth "chore: cleanup auth package" 
+```
+
+Optional global install (works from any repo path):
+
+```bash
+mkdir -p "$HOME/.local/bin"
+ln -sf "$(git rev-parse --show-toplevel)/scripts/opencode-pr.sh" "$HOME/.local/bin/opencode-pr"
+```
+
+Then run:
+
+```bash
+opencode-pr <branch-name> "<PR title>"
+```
+
 ## TanStack SSR/API/auth wiring (current)
 
 Implemented in `apps/web`:
