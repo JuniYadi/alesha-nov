@@ -2,7 +2,6 @@
 "@alesha-nov/auth": patch
 "@alesha-nov/auth-web": patch
 "@alesha-nov/config": patch
-"@alesha-nov/web": patch
 ---
 
 Allow missing users to receive magic links by auto-creating accounts, wire magic-link email URLs to app origin, and reuse that link path for verification redirects.
