@@ -21,6 +21,7 @@ function LoginPage() {
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [magicEmail, setMagicEmail] = useState('')
   const [token, setToken] = useState('')
 
   return (
@@ -45,11 +46,12 @@ function LoginPage() {
         <div className="island-shell rounded-2xl p-6">
           <h2 className="mb-3 text-xl font-semibold">Magic link demo</h2>
           <div className="space-y-3">
+            <input className="w-full rounded-md border p-2" placeholder="Email" type="email" value={magicEmail} onChange={(e) => setMagicEmail(e.target.value)} required />
             <button
               className="rounded-md border px-4 py-2"
               disabled={magicReq.loading}
               onClick={async () => {
-                await magicReq.request({ email })
+                await magicReq.request({ email: magicEmail })
               }}
               type="button"
             >
