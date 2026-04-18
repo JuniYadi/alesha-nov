@@ -151,7 +151,11 @@ function buildDefaultAuthEmail(flow: AuthEmailFlow, context: AuthEmailDeliveryCo
 
   if (flow === "magic-link") {
     let appUrl = "http://localhost:3000";
-    try { appUrl = resolveAppConfig().url; } catch {}
+    try {
+      appUrl = resolveAppConfig().url;
+    } catch {
+      // Keep localhost default when app config is unavailable.
+    }
     const magicLinkUrl = `${appUrl}/auth/magic-link/verify?token=${encodeURIComponent(context.token)}`;
     const subject = "Your Magic Link";
     const html = `<p>Hi,</p><p>Click <a href="${magicLinkUrl}">here</a> to sign in. This link expires in ${expiresInMinutes} minutes.</p>`;
