@@ -10,6 +10,7 @@ Auth and email environment configuration resolvers for the monorepo.
 - `resolveMagicLinkConfig()`
 - `resolveEmailTransportConfig()` (SES/SMTP with validation)
 - `resolveOAuthConfig()` (Google/GitHub)
+- `resolveAppConfig()`
 
 ## Required for Target Auth (Email/Password, Magic Link, Google/GitHub)
 

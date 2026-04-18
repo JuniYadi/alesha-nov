@@ -41,6 +41,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@alesha-nov/config": "workspace:*",
     "@alesha-nov/db": "workspace:*",
     "@alesha-nov/email": "workspace:*"
   },

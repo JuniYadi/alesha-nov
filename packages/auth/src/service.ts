@@ -1,4 +1,6 @@
 import { createDatabaseClient, runMigrations, type DBConfig } from "@alesha-nov/db";
+import { resolveAppConfig, resolveEmailTransportConfig, resolveMagicLinkConfig } from "@alesha-nov/config";
+import { createSesProvider, createSmtpProvider, type EmailProvider } from "@alesha-nov/email";
 import { randomBytes } from "node:crypto";
 import { authMigrations } from "./migrations";
 import type {
@@ -7,6 +9,7 @@ import type {
   AuthEmailDeliveryContext,
   AuthEmailFlow,
   AuthEmailFlowDeliveryOptions,
+  AuthEmailOptions,
   AuthService,
   AuthServiceOptions,
   AuthSession,
@@ -147,9 +150,16 @@ function buildDefaultAuthEmail(flow: AuthEmailFlow, context: AuthEmailDeliveryCo
   const expiresInMinutes = Math.max(1, Math.ceil(context.ttlSeconds / 60));
 
   if (flow === "magic-link") {
+    let appUrl = "http://localhost:3000";
+    try {
+      appUrl = resolveAppConfig().url;
+    } catch {
+      // Keep localhost default when app config is unavailable.
+    }
+    const magicLinkUrl = `${appUrl}/auth/magic-link/verify?token=${encodeURIComponent(context.token)}`;
     const subject = "Your Magic Link";
-    const html = `<p>Hi,</p><p>Click <a href="${context.token}">here</a> to sign in. This link expires in ${expiresInMinutes} minutes.</p>`;
-    const text = `Hi,\n\nVisit this link to sign in: ${context.token}\nExpires in ${expiresInMinutes} minutes.`;
+    const html = `<p>Hi,</p><p>Click <a href="${magicLinkUrl}">here</a> to sign in. This link expires in ${expiresInMinutes} minutes.</p>`;
+    const text = `Hi,\n\nVisit this link to sign in: ${magicLinkUrl}\nExpires in ${expiresInMinutes} minutes.`;
     return { subject, html, text };
   }
 
@@ -240,6 +250,37 @@ function clearLoginFailures(loginAttempts: Map<string, LoginAttemptState>, key: 
   loginAttempts.delete(key);
 }
 
+function resolveEmailOptionsFromEnv(): AuthEmailOptions | undefined {
+  const transportConfig = resolveEmailTransportConfig();
+  if (!transportConfig) return undefined;
+
+  let provider: EmailProvider;
+  if (transportConfig.type === "ses") {
+    provider = createSesProvider({
+      region: transportConfig.ses!.region,
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? "",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? "",
+    });
+  } else {
+    provider = createSmtpProvider({
+      host: transportConfig.smtp!.host,
+      port: transportConfig.smtp!.port,
+      secure: transportConfig.smtp!.secure,
+      user: transportConfig.smtp!.username ?? "",
+      pass: transportConfig.smtp!.password ?? "",
+    });
+  }
+
+  let from: string;
+  try {
+    from = resolveMagicLinkConfig().sender;
+  } catch {
+    from = process.env.AUTH_EMAIL_FROM ?? process.env.EMAIL_FROM ?? "noreply@example.com";
+  }
+
+  return { provider, from };
+}
+
 export async function createAuthService(
   dbConfig: DBConfig,
   options: AuthServiceOptions = {},
@@ -248,10 +289,13 @@ export async function createAuthService(
   const client = providedClient ?? createDatabaseClient(dbConfig);
   await runMigrations(client, authMigrations);
 
-  const passwordPolicyValidator = options.passwordPolicyValidator ?? defaultPasswordPolicyValidator;
-  const auditSink = options.auditSink;
-  const loginProtection = options.loginProtection ?? DEFAULT_LOGIN_PROTECTION;
-  const sessionStrategy = options.sessionStrategy ?? new InMemoryAuthSessionStrategy();
+  const emailOptions = options.email ?? resolveEmailOptionsFromEnv();
+  const resolvedOptions: AuthServiceOptions = { ...options, email: emailOptions };
+
+  const passwordPolicyValidator = resolvedOptions.passwordPolicyValidator ?? defaultPasswordPolicyValidator;
+  const auditSink = resolvedOptions.auditSink;
+  const loginProtection = resolvedOptions.loginProtection ?? DEFAULT_LOGIN_PROTECTION;
+  const sessionStrategy = resolvedOptions.sessionStrategy ?? new InMemoryAuthSessionStrategy();
   const loginAttempts = new Map<string, LoginAttemptState>();
 
   return {
@@ -458,8 +502,28 @@ export async function createAuthService(
       const rows = await client.sql`
         SELECT id FROM auth_users WHERE email = ${email} LIMIT 1
       `;
-      const user = rows[0] as { id: string } | undefined;
-      if (!user) throw new Error("User not found");
+      let user = rows[0] as { id: string } | undefined;
+
+      if (!user) {
+        const userId = newId();
+        const generatedPasswordHash = hashPassword(randomBytes(48).toString("hex"));
+        const now = new Date().toISOString();
+
+        await client.sql`
+          INSERT INTO auth_users (id, email, password_hash, name, image, email_verified_at)
+          VALUES (${userId}, ${email}, ${generatedPasswordHash}, NULL, NULL, ${now})
+        `;
+
+        await emitAuditEvent(auditSink, {
+          type: "SIGNUP",
+          userId,
+          email,
+          metadata: { roleCount: 0 },
+          occurredAt: now,
+        });
+
+        user = { id: userId };
+      }
 
       const rawToken = randomBytes(32).toString("base64url");
       const tokenHash = hashToken(rawToken);
@@ -471,7 +535,7 @@ export async function createAuthService(
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
 
-      await maybeDeliverAuthTokenEmail(options, "magic-link", {
+      await maybeDeliverAuthTokenEmail(resolvedOptions, "magic-link", {
         flow: "magic-link",
         email,
         token: rawToken,
@@ -550,7 +614,7 @@ export async function createAuthService(
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
 
-      await maybeDeliverAuthTokenEmail(options, "password-reset", {
+      await maybeDeliverAuthTokenEmail(resolvedOptions, "password-reset", {
         flow: "password-reset",
         email,
         token: rawToken,
@@ -642,7 +706,7 @@ export async function createAuthService(
         VALUES (${tokenHash}, ${user.id}, ${expiresAt})
       `;
 
-      await maybeDeliverAuthTokenEmail(options, "email-verification", {
+      await maybeDeliverAuthTokenEmail(resolvedOptions, "email-verification", {
         flow: "email-verification",
         email,
         token: rawToken,

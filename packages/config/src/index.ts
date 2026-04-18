@@ -50,6 +50,13 @@ export interface OAuthConfig {
   github?: OAuthProviderConfig;
 }
 
+export interface AppConfig {
+  env: "development" | "production" | "test";
+  url: string;
+  debug: boolean;
+  timezone: string;
+}
+
 function readEnv(keys: string[]): string | undefined {
   for (const key of keys) {
     const value = process.env[key]?.trim();
@@ -252,4 +259,21 @@ export function resolveOAuthConfig(): OAuthConfig {
     google: resolveOAuthProviderConfig("google"),
     github: resolveOAuthProviderConfig("github"),
   };
+}
+
+export function resolveAppConfig(): AppConfig {
+  const nodeEnv = readEnv(["APP_ENV", "NODE_ENV"]) ?? "development";
+  const validEnvs = ["development", "production", "test"];
+  if (!validEnvs.includes(nodeEnv)) {
+    throw new Error(`Invalid APP_ENV/NODE_ENV. Supported values: ${validEnvs.join(" | ")}`);
+  }
+
+  const url = readEnv(["APP_URL"]) ?? "http://localhost:3000";
+
+  const debugRaw = readEnv(["APP_DEBUG"]);
+  const debug = debugRaw ? parseBoolean(debugRaw, "app debug") : nodeEnv === "development";
+
+  const timezone = readEnv(["APP_TIMEZONE"]) ?? "UTC";
+
+  return { env: nodeEnv as AppConfig["env"], url, debug, timezone };
 }

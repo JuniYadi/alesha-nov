@@ -529,6 +529,33 @@ export function createAuthWeb(options: AuthWebOptions): AuthRouteHandlers {
         return json(200, { sent: true }, responseCorsHeaders);
       }
 
+      if (method === "GET" && subPath === "/magic-link/verify") {
+        const limited = await checkRateLimit(request);
+        if (limited) return limited;
+        const url = new URL(request.url);
+        const token = url.searchParams.get("token");
+        if (!token) return json(400, { error: "Missing token parameter" }, responseCorsHeaders);
+
+        const user = await options.authService.verifyMagicLinkToken(token);
+        if (!user) return json(401, { error: "Invalid or expired token" }, responseCorsHeaders);
+
+        const publicUser = toPublicUser(user);
+        const session = newSession(publicUser);
+        const appUrl = request.headers.get("origin") ?? new URL(request.url).origin;
+
+        return new Response(null, {
+          status: 302,
+          headers: {
+            "Location": `${appUrl}/dashboard`,
+            "set-cookie": serializeCookie(cookieName, sessionCookieValue(session), {
+              maxAge: sessionTtlSeconds,
+              secure: secureCookie,
+            }),
+            ...responseCorsHeaders,
+          },
+        });
+      }
+
       if (method === "POST" && subPath === "/magic-link/verify") {
         const limited = await checkRateLimit(request);
         if (limited) return limited;
