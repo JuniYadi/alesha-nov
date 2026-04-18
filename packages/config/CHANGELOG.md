@@ -1,5 +1,13 @@
 # @alesha-nov/config
 
+## 0.3.1
+
+### Patch Changes
+
+- 3905e1d: Allow missing users to receive magic links by auto-creating accounts, wire magic-link email URLs to app origin, and reuse that link path for verification redirects.
+
+  Also update the login demo page so the magic-link request input is separate from the password-login email field to avoid confusion.
+
 ## 0.3.0
 
 ### Minor Changes

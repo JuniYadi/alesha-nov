@@ -1,5 +1,16 @@
 # @alesha-nov/auth-web
 
+## 0.2.7
+
+### Patch Changes
+
+- 3905e1d: Allow missing users to receive magic links by auto-creating accounts, wire magic-link email URLs to app origin, and reuse that link path for verification redirects.
+
+  Also update the login demo page so the magic-link request input is separate from the password-login email field to avoid confusion.
+
+- Updated dependencies [3905e1d]
+  - @alesha-nov/auth@0.2.7
+
 ## 0.2.6
 
 ### Patch Changes
