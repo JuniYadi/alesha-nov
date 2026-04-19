@@ -117,4 +117,93 @@ describe("createAuthService core auth", () => {
     expect(roles).toEqual(["admin", "editor"]);
     expect(sqlCalls.some((c) => c.text.includes("SELECT role") && c.text.includes("FROM auth_user_roles"))).toBe(true);
   });
+
+  test("signup without roles assigns default 'user' role", async () => {
+    queue.push(
+      [],
+      [],
+      [
+        {
+          id: "u-new",
+          email: "newbie@example.com",
+          password_hash: "hash",
+          name: null,
+          image: null,
+          email_verified_at: null,
+          created_at: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+      [{ role: "user" }]
+    );
+
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+    const result = await svc.signup({
+      email: "Newbie@example.com",
+      password: "secret",
+    });
+
+    expect(result.roles).toEqual(["user"]);
+    expect(sqlCalls.filter((c) => c.text.includes("INSERT INTO auth_user_roles"))).toHaveLength(1);
+  });
+
+  test("signup with explicit roles does not get default roles", async () => {
+    queue.push(
+      [],
+      [],
+      [
+        {
+          id: "u-admin",
+          email: "admin@example.com",
+          password_hash: "hash",
+          name: null,
+          image: null,
+          email_verified_at: null,
+          created_at: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+      [{ role: "admin" }]
+    );
+
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+    const result = await svc.signup({
+      email: "Admin@example.com",
+      password: "secret",
+      roles: ["admin"],
+    });
+
+    expect(result.roles).toEqual(["admin"]);
+    expect(sqlCalls.filter((c) => c.text.includes("INSERT INTO auth_user_roles"))).toHaveLength(1);
+  });
+
+  test("signup with custom defaultRoles option uses those instead of 'user'", async () => {
+    queue.push(
+      [],
+      [],
+      [],
+      [
+        {
+          id: "u-custom",
+          email: "custom@example.com",
+          password_hash: "hash",
+          name: null,
+          image: null,
+          email_verified_at: null,
+          created_at: "2024-01-01T00:00:00.000Z",
+        },
+      ],
+      [{ role: "member" }, { role: "viewer" }]
+    );
+
+    const svc = await createAuthService(
+      { type: "sqlite", url: ":memory:" },
+      { defaultRoles: ["member", "viewer"] }
+    );
+    const result = await svc.signup({
+      email: "Custom@example.com",
+      password: "secret",
+    });
+
+    expect(result.roles).toEqual(["member", "viewer"]);
+    expect(sqlCalls.filter((c) => c.text.includes("INSERT INTO auth_user_roles"))).toHaveLength(2);
+  });
 });

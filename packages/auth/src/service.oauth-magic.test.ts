@@ -33,6 +33,19 @@ describe("createAuthService oauth + magic-link", () => {
     expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_magic_link_tokens"))).toBe(true);
   });
 
+  test("issueMagicLinkToken creates new user with default 'user' role when user does not exist", async () => {
+    queue.push([], [{ id: "u-new" }], []);
+    mock.module("@alesha-nov/email", () => ({
+      sendAuthEmail: async () => {},
+    }));
+
+    const svc = await createAuthService({ type: "sqlite", url: ":memory:" });
+    await svc.issueMagicLinkToken({ email: "newuser@example.com", ttlSeconds: 60 });
+
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_users"))).toBe(true);
+    expect(sqlCalls.some((c) => c.text.includes("INSERT INTO auth_user_roles"))).toBe(true);
+  });
+
   test("verifyMagicLinkToken returns user and marks token used", async () => {
     queue.push(
       [

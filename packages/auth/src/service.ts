@@ -297,6 +297,7 @@ export async function createAuthService(
   const loginProtection = resolvedOptions.loginProtection ?? DEFAULT_LOGIN_PROTECTION;
   const sessionStrategy = resolvedOptions.sessionStrategy ?? new InMemoryAuthSessionStrategy();
   const loginAttempts = new Map<string, LoginAttemptState>();
+  const defaultRoles = normalizeRoles(resolvedOptions.defaultRoles ?? ["user"]);
 
   return {
     async signup(input: SignupInput) {
@@ -308,7 +309,8 @@ export async function createAuthService(
       }
 
       const passwordHash = hashPassword(input.password);
-      const roles = normalizeRoles(input.roles ?? []);
+      const inputRoles = input.roles ?? [];
+      const roles = normalizeRoles(inputRoles.length > 0 ? inputRoles : defaultRoles);
 
       await client.sql`
         INSERT INTO auth_users (id, email, password_hash, name, image)
@@ -514,11 +516,18 @@ export async function createAuthService(
           VALUES (${userId}, ${email}, ${generatedPasswordHash}, NULL, NULL, ${now})
         `;
 
+        for (const role of defaultRoles) {
+          await client.sql`
+            INSERT INTO auth_user_roles (user_id, role)
+            VALUES (${userId}, ${role})
+          `;
+        }
+
         await emitAuditEvent(auditSink, {
           type: "SIGNUP",
           userId,
           email,
-          metadata: { roleCount: 0 },
+          metadata: { roleCount: defaultRoles.length },
           occurredAt: now,
         });
 
@@ -868,7 +877,8 @@ export async function createAuthService(
           )
         `;
 
-        const newRoles = normalizeRoles(input.roles ?? []);
+        const oauthInputRoles = input.roles ?? [];
+        const newRoles = normalizeRoles(oauthInputRoles.length > 0 ? oauthInputRoles : defaultRoles);
         for (const role of newRoles) {
           await client.sql`
             INSERT INTO auth_user_roles (user_id, role)
