@@ -198,6 +198,7 @@ export interface AuthServiceOptions {
   loginProtection?: LoginProtectionConfig;
   sessionStrategy?: AuthSessionStrategy;
   email?: AuthEmailOptions;
+  defaultRoles?: string[];
 }
 
 export interface OAuthAuthorizationProviderConfig {
