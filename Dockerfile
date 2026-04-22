@@ -9,7 +9,13 @@ COPY packages ./packages
 
 RUN bun install --frozen-lockfile
 COPY . .
-RUN bun run build
+RUN bun run --filter @alesha-nov/config build && \
+    bun run --filter @alesha-nov/db build && \
+    bun run --filter @alesha-nov/email build && \
+    bun run --filter @alesha-nov/auth build && \
+    bun run --filter @alesha-nov/auth-web build && \
+    bun run --filter @alesha-nov/auth-react build && \
+    bun run --filter web build
 
 FROM oven/bun:1.3.11 AS runner
 WORKDIR /app
