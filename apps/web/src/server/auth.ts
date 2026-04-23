@@ -25,6 +25,21 @@ async function buildHandler() {
     secureCookie: resolveSecureCookie(),
     sessionSecret: resolveSessionSecret(),
     getUser: (userId) => getUserById(dbClient, userId),
+    rateLimit: {
+      maxRequests: 100,
+      windowSeconds: 60,
+    },
+    getRateLimitKey: (request: Request) => {
+      const forwarded = request.headers.get('x-forwarded-for')
+      const realIp = request.headers.get('x-real-ip')
+      const ip = forwarded?.split(',')[0]?.trim() ?? realIp ?? 'unknown'
+      return ip
+    },
+    cors: {
+      allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [],
+      allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowCredentials: true,
+    },
   })
 }
 
