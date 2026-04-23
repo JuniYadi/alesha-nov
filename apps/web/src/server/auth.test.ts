@@ -7,54 +7,50 @@ afterEach(() => {
   vi.resetModules()
 })
 
-describe('server/auth env resolution', () => {
-  test('resolveSessionSecret uses env when set', async () => {
-    process.env.SESSION_SECRET = '0123456789abcdef0123456789abcdef'
+describe('server/auth-config', () => {
+  test('resolveSessionSecret reads AUTH_JWT_SECRET', async () => {
+    process.env.AUTH_JWT_SECRET = 'my-jwt-secret-value'
 
     const { resolveSessionSecret } = await import('./auth-config')
-    expect(resolveSessionSecret()).toBe('0123456789abcdef0123456789abcdef')
+    expect(resolveSessionSecret()).toBe('my-jwt-secret-value')
   })
 
-  test('resolveSessionSecret falls back to dev secret outside production', async () => {
-    delete process.env.SESSION_SECRET
-    process.env.NODE_ENV = 'development'
+  test('resolveSessionSecret reads JWT_SECRET fallback', async () => {
+    delete process.env.AUTH_JWT_SECRET
+    process.env.JWT_SECRET = 'fallback-jwt-secret'
 
     const { resolveSessionSecret } = await import('./auth-config')
-    expect(resolveSessionSecret()).toBe('dev-session-secret-change-me')
+    expect(resolveSessionSecret()).toBe('fallback-jwt-secret')
   })
 
-  test('resolveSessionSecret throws when missing in production', async () => {
-    delete process.env.SESSION_SECRET
-    process.env.NODE_ENV = 'production'
+  test('resolveSessionSecret throws when no secret configured', async () => {
+    delete process.env.AUTH_JWT_SECRET
+    delete process.env.JWT_SECRET
 
     const { resolveSessionSecret } = await import('./auth-config')
-    expect(() => resolveSessionSecret()).toThrowError('SESSION_SECRET is required in production')
+    expect(() => resolveSessionSecret()).toThrowError('Missing JWT secret')
   })
 
-  test('resolveSecureCookie defaults true in production', async () => {
-    process.env.NODE_ENV = 'production'
-    delete process.env.AUTH_SECURE_COOKIE
+  test('resolveSecureCookie reads AUTH_SESSION_SECURE true', async () => {
+    process.env.AUTH_SESSION_SECURE = 'true'
 
     const { resolveSecureCookie } = await import('./auth-config')
     expect(resolveSecureCookie()).toBe(true)
   })
 
-  test('resolveSecureCookie defaults false in development', async () => {
-    process.env.NODE_ENV = 'development'
-    delete process.env.AUTH_SECURE_COOKIE
+  test('resolveSecureCookie reads SESSION_SECURE true', async () => {
+    delete process.env.AUTH_SESSION_SECURE
+    process.env.SESSION_SECURE = 'true'
 
     const { resolveSecureCookie } = await import('./auth-config')
-    expect(resolveSecureCookie()).toBe(false)
+    expect(resolveSecureCookie()).toBe(true)
   })
 
-  test('resolveSecureCookie allows explicit override', async () => {
-    process.env.NODE_ENV = 'production'
-    process.env.AUTH_SECURE_COOKIE = 'false'
+  test('resolveSecureCookie defaults to false', async () => {
+    delete process.env.AUTH_SESSION_SECURE
+    delete process.env.SESSION_SECURE
 
     const { resolveSecureCookie } = await import('./auth-config')
     expect(resolveSecureCookie()).toBe(false)
-
-    process.env.AUTH_SECURE_COOKIE = '1'
-    expect(resolveSecureCookie()).toBe(true)
   })
 })
