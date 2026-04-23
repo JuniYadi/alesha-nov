@@ -18,7 +18,7 @@
     },
     "apps/web": {
       "name": "web",
-      "version": "0.1.6",
+      "version": "0.1.9",
       "dependencies": {
         "@alesha-nov/auth": "workspace:*",
         "@alesha-nov/auth-react": "workspace:*",
@@ -58,15 +58,16 @@
     },
     "packages/auth": {
       "name": "@alesha-nov/auth",
-      "version": "0.2.4",
+      "version": "0.2.7",
       "dependencies": {
+        "@alesha-nov/config": "workspace:*",
         "@alesha-nov/db": "workspace:*",
         "@alesha-nov/email": "workspace:*",
       },
     },
     "packages/auth-react": {
       "name": "@alesha-nov/auth-react",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "devDependencies": {
         "@testing-library/react": "^16.3.2",
         "@types/react": "^19.0.0",
@@ -81,18 +82,18 @@
     },
     "packages/auth-web": {
       "name": "@alesha-nov/auth-web",
-      "version": "0.2.4",
+      "version": "0.2.7",
       "dependencies": {
         "@alesha-nov/auth": "workspace:*",
       },
     },
     "packages/config": {
       "name": "@alesha-nov/config",
-      "version": "0.3.0",
+      "version": "0.3.1",
     },
     "packages/db": {
       "name": "@alesha-nov/db",
-      "version": "0.2.1",
+      "version": "0.2.2",
     },
     "packages/email": {
       "name": "@alesha-nov/email",

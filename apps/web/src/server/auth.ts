@@ -7,6 +7,14 @@ import { createTanstackAuthHandler } from '@alesha-nov/auth-web/tanstack'
 import { resolveSessionSecret, resolveSecureCookie } from './auth-config'
 import { createAuthEmailOptions } from './email'
 
+function getRateLimitKey(request: Request): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  if (forwarded) return forwarded.split(',')[0].trim()
+  const realIp = request.headers.get('x-real-ip')
+  if (realIp) return realIp.trim()
+  return 'unknown'
+}
+
 async function buildHandler() {
   const dbConfig = {
     type: resolveDBType(),
@@ -25,6 +33,16 @@ async function buildHandler() {
     secureCookie: resolveSecureCookie(),
     sessionSecret: resolveSessionSecret(),
     getUser: (userId) => getUserById(dbClient, userId),
+    rateLimit: {
+      windowSeconds: 60,
+      maxRequests: 100,
+    },
+    getRateLimitKey,
+    cors: {
+      allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',').map((s) => s.trim()) || [],
+      allowCredentials: true,
+      allowedMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    },
   })
 }
 
