@@ -2,8 +2,11 @@ import { Link } from '@tanstack/react-router'
 import { useAuth } from '@alesha-nov/auth-react'
 import ThemeToggle from './ThemeToggle'
 
+const ADMIN_ROLES = new Set(['admin', 'roles:write:any'])
+
 export default function Header() {
-  const { status, user } = useAuth()
+  const { status, user, session } = useAuth()
+  const canManageRoles = (session?.roles ?? []).some((role) => ADMIN_ROLES.has(role))
 
   return (
     <header className="sticky top-0 z-50 border-b border-[var(--line)] bg-[var(--header-bg)] px-4 backdrop-blur-lg">
@@ -43,9 +46,22 @@ export default function Header() {
             </>
           )}
           {status === 'authenticated' && (
-            <Link to="/dashboard" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
-              Dashboard
-            </Link>
+            <>
+              <Link to="/dashboard" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                Dashboard
+              </Link>
+              <Link to="/settings/sessions" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                Sessions
+              </Link>
+              <Link to="/settings/oauth-link" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                Linked Accounts
+              </Link>
+              {canManageRoles ? (
+                <Link to="/settings/roles" className="nav-link" activeProps={{ className: 'nav-link is-active' }}>
+                  Roles
+                </Link>
+              ) : null}
+            </>
           )}
         </div>
       </nav>
