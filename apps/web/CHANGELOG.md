@@ -1,5 +1,11 @@
 # web
 
+## 0.3.0
+
+### Minor Changes
+
+- 7ec9bb7: Configure rate limiting (100 req/min per IP) and CORS for auth endpoints in apps/web.
+
 ## 0.2.0
 
 ### Minor Changes
