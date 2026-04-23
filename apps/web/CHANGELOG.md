@@ -1,5 +1,11 @@
 # web
 
+## 0.2.0
+
+### Minor Changes
+
+- 145be8d: Add Phase 2 auth UI flows in web app: forgot/reset password pages, verify-email flow, OAuth login/link settings, session revocation actions, admin role management page, and authenticated header navigation updates.
+
 ## 0.1.9
 
 ### Patch Changes
