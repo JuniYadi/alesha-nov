@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useLogin, useMagicLinkRequest, useMagicLinkVerify, useAuth, useOAuthLogin } from '@alesha-nov/auth-react'
+import { useMagicLinkRequest, useMagicLinkVerify, useOAuthLogin } from '@alesha-nov/auth-react'
+import { useAuthUser, useLoginMutation } from '../query/auth'
 import { getServerSessionOrNull } from '../server/session'
 
 export const Route = createFileRoute('/login')({
@@ -14,11 +15,14 @@ export const Route = createFileRoute('/login')({
 })
 
 function LoginPage() {
-  const { login, loading, error } = useLogin({ basePath: '/auth' })
+  const loginMutation = useLoginMutation({ basePath: '/auth' })
+  const authUserQuery = useAuthUser({ basePath: '/auth' })
   const magicReq = useMagicLinkRequest({ basePath: '/auth' })
   const magicVerify = useMagicLinkVerify({ basePath: '/auth' })
   const { login: oauthLogin, loading: oauthLoading, error: oauthError } = useOAuthLogin({ basePath: '/auth' })
-  const { user } = useAuth()
+
+  const user = authUserQuery.data?.user
+  const loginError = loginMutation.error instanceof Error ? loginMutation.error.message : null
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,19 +38,19 @@ function LoginPage() {
             className="space-y-3"
             onSubmit={async (e) => {
               e.preventDefault()
-              await login({ email, password })
+              await loginMutation.mutateAsync({ email, password })
             }}
           >
             <input className="w-full rounded-md border p-2" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             <input className="w-full rounded-md border p-2" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            <button className="rounded-md border px-4 py-2" disabled={loading} type="submit">{loading ? 'Loading...' : 'Login'}</button>
+            <button className="rounded-md border px-4 py-2" disabled={loginMutation.isPending} type="submit">{loginMutation.isPending ? 'Loading...' : 'Login'}</button>
           </form>
           <p className="mt-3 text-sm text-[var(--sea-ink-soft)]">
             <Link to="/forgot-password" className="underline">
               Forgot password?
             </Link>
           </p>
-          {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
+          {loginError ? <p className="mt-3 text-sm text-red-600">{loginError}</p> : null}
 
           <div className="mt-5 space-y-2 border-t pt-4">
             <button

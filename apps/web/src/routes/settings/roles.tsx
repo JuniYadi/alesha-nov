@@ -1,6 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useAuth } from '@alesha-nov/auth-react'
 import { useMemo, useState } from 'react'
+import { authUserQueryOptions } from '../../query/auth'
+import { queryClient } from '../../query/client'
 import { getServerSessionOrNull } from '../../server/session'
 
 const ADMIN_PERMISSIONS = new Set(['admin', 'roles:write:any'])
@@ -18,6 +20,10 @@ export const Route = createFileRoute('/settings/roles')({
     const canManageRoles = session.roles.some((role) => ADMIN_PERMISSIONS.has(role))
     if (!canManageRoles) {
       throw redirect({ to: '/dashboard' })
+    }
+
+    if (typeof window !== 'undefined') {
+      void queryClient.prefetchQuery(authUserQueryOptions({ basePath: '/auth' }))
     }
   },
   component: RolesSettingsPage,
