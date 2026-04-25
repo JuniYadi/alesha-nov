@@ -1,6 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useAuth, useOAuthLink } from '@alesha-nov/auth-react'
+import { authUserQueryOptions } from '../../query/auth'
+import { queryClient } from '../../query/client'
 import { getServerSessionOrNull } from '../../server/session'
 
 type LinkedAccount = {
@@ -18,6 +20,10 @@ export const Route = createFileRoute('/settings/oauth-link')({
         to: '/login',
         search: { redirect: location.href },
       })
+    }
+
+    if (typeof window !== 'undefined') {
+      void queryClient.prefetchQuery(authUserQueryOptions({ basePath: '/auth' }))
     }
   },
   component: OAuthLinkSettingsPage,
