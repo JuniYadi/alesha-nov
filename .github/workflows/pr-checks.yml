@@ -53,7 +53,56 @@ jobs:
             exit 1
           fi
 
+          mapfile -t publishable_packages < <(
+            node -e '
+              const fs = require("fs");
+              const path = require("path");
+              const packagesDir = "packages";
+
+              for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+                if (!entry.isDirectory()) continue;
+
+                const packageJsonPath = path.join(packagesDir, entry.name, "package.json");
+                if (!fs.existsSync(packageJsonPath)) continue;
+
+                const pkg = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+                if (pkg.name) console.log(pkg.name);
+              }
+            '
+          )
+
+          invalid_changeset_targets=0
+
           while IFS= read -r file; do
+            if [[ "$file" == .changeset/*.md ]]; then
+              if [[ ! -f "$file" ]]; then
+                continue
+              fi
+
+              while IFS= read -r pkg_name; do
+                [[ -z "$pkg_name" ]] && continue
+
+                if ! printf '%s\n' "${publishable_packages[@]}" | grep -Fxq "$pkg_name"; then
+                  echo "ERROR: $file targets '$pkg_name', but only packages/* workspace names are allowed in changesets."
+                  invalid_changeset_targets=1
+                fi
+              done < <(
+                awk '
+                  BEGIN { in_frontmatter = 0 }
+                  /^---$/ {
+                    in_frontmatter = !in_frontmatter
+                    next
+                  }
+                  in_frontmatter && /^"[^"]+"[[:space:]]*:[[:space:]]*(major|minor|patch)$/ {
+                    line = $0
+                    sub(/^"/, "", line)
+                    sub(/"[[:space:]]*:[[:space:]]*(major|minor|patch)$/, "", line)
+                    print line
+                  }
+                ' "$file"
+              )
+            fi
+
             if [[ "$file" == packages/*/package.json ]]; then
               status="$(git diff --name-status "$base_sha" "$head_sha" -- "$file" | awk '{print $1}')"
 
@@ -67,6 +116,10 @@ jobs:
               fi
             fi
           done < <(git diff --name-only "$base_sha" "$head_sha")
+
+          if [[ "$invalid_changeset_targets" -eq 1 ]]; then
+            exit 1
+          fi
 
           echo "✅ Changeset policy passed."
 
