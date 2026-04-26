@@ -1,5 +1,12 @@
 # @alesha-nov/auth-web
 
+## 0.2.8
+
+### Patch Changes
+
+- Updated dependencies [2386071]
+  - @alesha-nov/auth@0.3.0
+
 ## 0.2.7
 
 ### Patch Changes

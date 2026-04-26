@@ -1,5 +1,15 @@
 # @alesha-nov/auth
 
+## 0.3.0
+
+### Minor Changes
+
+- 2386071: Configure rate limiting and CORS in auth handler
+
+  - Add IP-based rate limiting (100 req/60s) via x-forwarded-for/x-real-ip
+  - Add CORS configuration reading from ALLOWED_ORIGINS env var
+  - Closes #83, #84
+
 ## 0.2.7
 
 ### Patch Changes
