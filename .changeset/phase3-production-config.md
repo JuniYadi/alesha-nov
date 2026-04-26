@@ -1,5 +1,5 @@
 ---
-"@alesha-nov/web": minor
+"@alesha-nov/auth": minor
 ---
 
 Configure rate limiting and CORS in auth handler
